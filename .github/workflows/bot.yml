@@ -35,7 +35,7 @@ jobs:
       - run: pip install requests numpy
       - name: Run bot
         env:
-          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID || vars.APCA_API_KEY_ID }}
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID || secrets.APCA_API_KEY || secrets.APCA_KEY_ID || secrets.ALPACA_API_KEY_ID || secrets.ALPACA_API_KEY || secrets.ALPACA_KEY_ID || secrets.API_KEY_ID || vars.APCA_API_KEY_ID }}
           APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY || vars.APCA_API_SECRET_KEY }}
           MODE: ${{ github.event.inputs.mode || 'auto' }}
         run: |
