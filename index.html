@@ -212,6 +212,8 @@ const I={
  hi(a,n){const o=nanArr(a.length);for(let i=n-1;i<a.length;i++){let m=-Infinity;for(let j=i-n+1;j<=i;j++)if(a[j]>m)m=a[j];o[i]=m}return o},
  lo(a,n){const o=nanArr(a.length);for(let i=n-1;i<a.length;i++){let m=Infinity;for(let j=i-n+1;j<=i;j++)if(a[j]<m)m=a[j];o[i]=m}return o},
  vwap(x){const o=new Float64Array(x.n);let pv=0,v=0,d='';for(let i=0;i<x.n;i++){const b=x.b[i];if(b.d!==d){d=b.d;pv=0;v=0}const tp=(b.h+b.l+b.c)/3;pv+=tp*b.v;v+=b.v;o[i]=v>0?pv/v:tp}return o},
+ wma(a,n){const o=nanArr(a.length),den=n*(n+1)/2;let f=-1;for(let i=0;i<a.length;i++){if(!isFinite(a[i]))continue;if(f<0)f=i;if(i-f+1>=n){let s=0;for(let j=0;j<n;j++)s+=a[i-j]*(n-j);o[i]=s/den}}return o},
+ dmi(x,n){const p=new Float64Array(x.n),m=new Float64Array(x.n);for(let i=1;i<x.n;i++){const u=x.h[i]-x.h[i-1],d=x.l[i-1]-x.l[i];p[i]=u>d&&u>0?u:0;m[i]=d>u&&d>0?d:0}const tr=I.rma(I.tr(x),n),rp=I.rma(p,n),rm=I.rma(m,n),P=nanArr(x.n),M=nanArr(x.n),dx=nanArr(x.n);for(let i=0;i<x.n;i++){if(!isFinite(tr[i])||tr[i]===0)continue;const a=100*rp[i]/tr[i],b=100*rm[i]/tr[i];P[i]=a;M[i]=b;dx[i]=a+b>0?100*Math.abs(a-b)/(a+b):0}return {p:P,m:M,a:I.rma(dx,n)}},
  adx(x,n){const p=new Float64Array(x.n),m=new Float64Array(x.n);for(let i=1;i<x.n;i++){const u=x.h[i]-x.h[i-1],d=x.l[i-1]-x.l[i];p[i]=u>d&&u>0?u:0;m[i]=d>u&&d>0?d:0}const tr=I.rma(I.tr(x),n),rp=I.rma(p,n),rm=I.rma(m,n),dx=nanArr(x.n);for(let i=0;i<x.n;i++){if(!isFinite(tr[i])||tr[i]===0)continue;const a=100*rp[i]/tr[i],b=100*rm[i]/tr[i];dx[i]=a+b>0?100*Math.abs(a-b)/(a+b):0}return I.rma(dx,n)}
 };
 class Ctx{
@@ -227,6 +229,8 @@ class Ctx{
  ll(n){return this.k('ll'+n,()=>I.lo(this.l,n))}
  bb(n,k){return this.k('bb'+n+'_'+k,()=>{const m=this.sma(n),s=I.sd(this.c,n),up=m.map((v,i)=>v+k*s[i]),lo=m.map((v,i)=>v-k*s[i]);return {m,up,lo}})}
  macd(f,s,g){return this.k('macd'+f+'_'+s+'_'+g,()=>{const a=this.ema(f),b=this.ema(s),m=a.map((v,i)=>v-b[i]),sg=I.ema(m,g);return {m,s:sg,h:m.map((v,i)=>v-sg[i])}})}
+ hma(n){return this.k('hma'+n,()=>{const a=I.wma(this.c,Math.max(1,Math.floor(n/2))),b=I.wma(this.c,n),d=a.map((v,i)=>2*v-b[i]);return I.wma(d,Math.max(1,Math.round(Math.sqrt(n))))})}
+ dmi(n){return this.k('dmi'+n,()=>I.dmi(this,n))}
  stoch(n,d){return this.k('st'+n+'_'+d,()=>{const H=this.hh(n),L=this.ll(n),raw=this.c.map((c,i)=>H[i]>L[i]?100*(c-L[i])/(H[i]-L[i]):50);for(let i=0;i<n-1;i++)raw[i]=NaN;const k=I.sma(raw,3);return {k,d:I.sma(k,d)}})}
 }
 
@@ -247,27 +251,114 @@ function evalSeries(x,src,P){const f=compile(src),E=env(x,P),o=nanArr(x.n);for(l
 function regime(n,f){const o=new Int8Array(n);for(let i=0;i<n;i++)o[i]=f(i);return o}
 function machine(n,step){const o=new Int8Array(n);let s=0;for(let i=0;i<n;i++){s=step(i,s);o[i]=s}return o}
 const intraOnly=x=>x.n&&x.b.length>1&&(x.b[1].t-x.b[0].t)<864e5;
+function tfMin(x){return x.k('tfm',()=>{let m=Infinity;for(let i=1;i<Math.min(x.n,300);i++){if(x.b[i].d===x.b[i-1].d){const d=(x.b[i].t-x.b[i-1].t)/6e4;if(d>0&&d<m)m=d}}return isFinite(m)?m:5})}
+function days(x){return x.k('days',()=>{const di=new Int32Array(x.n),o=[],h=[],l=[],c=[];let k=-1,d='';for(let i=0;i<x.n;i++){const b=x.b[i];if(b.d!==d){d=b.d;k++;o.push(b.o);h.push(b.h);l.push(b.l);c.push(b.c)}else{if(b.h>h[k])h[k]=b.h;if(b.l<l[k])l[k]=b.l;c[k]=b.c}di[i]=k}return {di,o,h,l,c}})}
+function dailyATR(x,n){return x.k('datr'+n,()=>{const D=days(x),K=D.c.length,tr=new Array(K).fill(NaN),A=new Array(K).fill(NaN);for(let k=1;k<K;k++)tr[k]=Math.max(D.h[k]-D.l[k],Math.abs(D.h[k]-D.c[k-1]),Math.abs(D.l[k]-D.c[k-1]));for(let k=0;k<K;k++){let s=0,c=0;for(let j=Math.max(1,k-n);j<k;j++){s+=tr[j];c++}if(c>=5)A[k]=s/c}return A})}
+function cciArr(x,n){return x.k('cci'+n,()=>{const tp=x.c.map((c,i)=>(x.h[i]+x.l[i]+c)/3),ma=I.sma(tp,n),o=nanArr(x.n);for(let i=n-1;i<x.n;i++){let md=0;for(let j=i-n+1;j<=i;j++)md+=Math.abs(tp[j]-ma[i]);md/=n;o[i]=md>0?(tp[i]-ma[i])/(0.015*md):0}return o})}
+function willrArr(x,n){return x.k('wr'+n,()=>{const H=x.hh(n),L=x.ll(n),w=nanArr(x.n);for(let i=0;i<x.n;i++)if(isFinite(H[i]))w[i]=H[i]>L[i]?-100*(H[i]-x.c[i])/(H[i]-L[i]):-50;return w})}
 const STRATS=[
- {id:'sma',name:'SMA crossover',p:[['fast','Fast',10,5,50,5],['slow','Slow',30,20,200,10]],ok:p=>p.fast<p.slow,
+ {id:'sma',cat:'Trend',name:'SMA crossover',p:[['fast','Fast',10,5,50,5],['slow','Slow',30,20,200,10]],ok:p=>p.fast<p.slow,
   fn(x,p,sh){const f=x.sma(p.fast),s=x.sma(p.slow);return regime(x.n,i=>f[i]>s[i]?1:f[i]<s[i]&&sh?-1:0)}},
- {id:'ema',name:'EMA crossover',p:[['fast','Fast',9,3,30,3],['slow','Slow',21,10,100,5]],ok:p=>p.fast<p.slow,
+ {id:'ema',cat:'Trend',name:'EMA crossover',p:[['fast','Fast',9,3,30,3],['slow','Slow',21,10,100,5]],ok:p=>p.fast<p.slow,
   fn(x,p,sh){const f=x.ema(p.fast),s=x.ema(p.slow);return regime(x.n,i=>f[i]>s[i]?1:f[i]<s[i]&&sh?-1:0)}},
- {id:'rsi',name:'RSI mean reversion',p:[['n','Period',14,2,30,2],['lo','Buy below',30,10,40,5],['hi','Sell above',70,50,90,5]],ok:p=>p.lo<p.hi,
+ {id:'rsi',cat:'Mean reversion',name:'RSI mean reversion',p:[['n','Period',14,2,30,2],['lo','Buy below',30,10,40,5],['hi','Sell above',70,50,90,5]],ok:p=>p.lo<p.hi,
   fn(x,p,sh){const r=x.rsi(p.n);return machine(x.n,(i,s)=>{const v=r[i];if(!isFinite(v))return s;if(s===0)return v<p.lo?1:sh&&v>p.hi?-1:0;if(s===1)return v>p.hi?(sh?-1:0):1;return v<p.lo?1:-1})}},
- {id:'bb',name:'Bollinger mean reversion',p:[['n','Period',20,10,50,5],['k','Std devs',2,1,3,0.5]],
+ {id:'bb',cat:'Mean reversion',name:'Bollinger mean reversion',p:[['n','Period',20,10,50,5],['k','Std devs',2,1,3,0.5]],
   fn(x,p,sh){const b=x.bb(p.n,p.k),c=x.c;return machine(x.n,(i,s)=>{if(!isFinite(b.m[i]))return s;if(s===0)return c[i]<b.lo[i]?1:sh&&c[i]>b.up[i]?-1:0;if(s===1)return c[i]>=b.m[i]?0:1;return c[i]<=b.m[i]?0:-1})}},
- {id:'don',name:'Donchian breakout',p:[['n','Entry period',20,10,60,5],['m','Exit period',10,5,30,5]],
+ {id:'don',cat:'Breakout',name:'Donchian breakout',p:[['n','Entry period',20,10,60,5],['m','Exit period',10,5,30,5]],
   fn(x,p,sh){const H=x.hh(p.n),L=x.ll(p.n),HX=x.hh(p.m),LX=x.ll(p.m),c=x.c;return machine(x.n,(i,s)=>{if(i<1||!isFinite(H[i-1]))return s;if(s===0)return c[i]>H[i-1]?1:sh&&c[i]<L[i-1]?-1:0;if(s===1)return c[i]<LX[i-1]?0:1;return c[i]>HX[i-1]?0:-1})}},
- {id:'macd',name:'MACD signal cross',p:[['f','Fast',12,6,20,2],['s','Slow',26,20,40,2],['g','Signal',9,5,15,2]],ok:p=>p.f<p.s,
+ {id:'macd',cat:'Trend',name:'MACD signal cross',p:[['f','Fast',12,6,20,2],['s','Slow',26,20,40,2],['g','Signal',9,5,15,2]],ok:p=>p.f<p.s,
   fn(x,p,sh){const m=x.macd(p.f,p.s,p.g);return regime(x.n,i=>m.m[i]>m.s[i]?1:m.m[i]<m.s[i]&&sh?-1:0)}},
- {id:'vwap',name:'VWAP trend (intraday)',p:[['band','Band %',0.1,0,0.5,0.05],['wait','Start after open (min)',15,0,60,5]],intra:1,
+ {id:'vwap',cat:'Intraday research',name:'VWAP trend (intraday)',p:[['band','Band %',0.1,0,0.5,0.05],['wait','Start after open (min)',15,0,60,5]],intra:1,
   fn(x,p,sh){if(!intraOnly(x))return new Int8Array(x.n);const w=x.vwap(),c=x.c,b=p.band/100;return machine(x.n,(i,s)=>{const m=x.b[i].m;if(m<570+p.wait||m>=955)return 0;if(s===0)return c[i]>w[i]*(1+b)?1:sh&&c[i]<w[i]*(1-b)?-1:0;if(s===1)return c[i]<w[i]?0:1;return c[i]>w[i]?0:-1})}},
- {id:'orb',name:'Opening range breakout (intraday)',p:[['or','Range minutes',15,5,60,5]],intra:1,
+ {id:'orb',cat:'Intraday research',name:'Opening range breakout (intraday)',p:[['or','Range minutes',15,5,60,5]],intra:1,
   fn(x,p,sh){const o=new Int8Array(x.n);if(!intraOnly(x))return o;let d='',H=-Infinity,L=Infinity,done=0,s=0;for(let i=0;i<x.n;i++){const b=x.b[i];if(b.d!==d){d=b.d;H=-Infinity;L=Infinity;done=0;s=0}
    if(b.m>=570&&b.m<570+p.or){H=Math.max(H,b.h);L=Math.min(L,b.l);s=0}else if(b.m>=570+p.or&&b.m<955&&isFinite(H)){const mid=(H+L)/2;if(s===0&&!done){if(b.c>H){s=1;done=1}else if(sh&&b.c<L){s=-1;done=1}}else if(s===1&&b.c<mid)s=0;else if(s===-1&&b.c>mid)s=0}else s=0;o[i]=s}return o}},
- {id:'stoch',name:'Stochastic reversal',p:[['n','%K period',14,5,30,3],['d','%D period',3,2,6,1],['lo','Oversold',20,10,30,5],['hi','Overbought',80,70,90,5]],
+ {id:'stoch',cat:'Mean reversion',name:'Stochastic reversal',p:[['n','%K period',14,5,30,3],['d','%D period',3,2,6,1],['lo','Oversold',20,10,30,5],['hi','Overbought',80,70,90,5]],
   fn(x,p,sh){const st=x.stoch(p.n,p.d),K=st.k,D=st.d;return machine(x.n,(i,s)=>{if(i<1||!isFinite(D[i-1]))return s;const up=K[i]>D[i]&&K[i-1]<=D[i-1],dn=K[i]<D[i]&&K[i-1]>=D[i-1];if(s===0)return up&&K[i]<p.lo?1:sh&&dn&&K[i]>p.hi?-1:0;if(s===1)return K[i]>p.hi?0:1;return K[i]<p.lo?0:-1})}},
- {id:'custom',name:'Custom formula',p:[['P1','P1',20,5,50,5],['P2','P2',50,20,200,10],['P3','P3',14,2,30,2]],cust:1,
+ {id:'orb5',cat:'Intraday research',name:'ORB stocks-in-play (Zarattini et al.)',p:[['or','Range minutes',5,5,30,5],['atrk','Stop × daily ATR',0.1,0.05,0.5,0.05]],intra:1,
+  fn(x,p,sh){const o=new Int8Array(x.n);if(!intraOnly(x))return o;const D=days(x),tf=tfMin(x),A=dailyATR(x,14);let k=-1,s=0,done=0,oo=NaN,stp=NaN;
+   for(let i=0;i<x.n;i++){const b=x.b[i];if(D.di[i]!==k){k=D.di[i];s=0;done=0;oo=NaN}
+    if(b.m<570){o[i]=0;continue}if(!isFinite(oo))oo=b.o;
+    if(s!==0){if(b.m>=955)s=0;else if(s>0&&b.l<=stp)s=0;else if(s<0&&b.h>=stp)s=0}
+    else if(!done&&b.m+tf>=570+p.or){done=1;const dir=b.c>oo?1:b.c<oo?-1:0,a=A[k];if(dir!==0&&isFinite(a)&&(dir>0||sh)&&b.m<955){s=dir;stp=b.c-dir*p.atrk*a}}
+    o[i]=s}return o}},
+ {id:'noise',cat:'Intraday research',name:'Noise-area momentum (Zarattini et al.)',p:[['lb','Lookback days',14,5,30,1],['vm','Band ×',1,0.5,2,0.25]],intra:1,
+  fn(x,p,sh){const o=new Int8Array(x.n);if(!intraOnly(x))return o;const D=days(x),tf=tfMin(x),w=x.vwap(),hist=new Map();let k=-1,s=0,st=0;
+   const flush=(a,e)=>{for(let j=a;j<e;j++){const m=x.b[j].m;let arr=hist.get(m);if(!arr){arr=[];hist.set(m,arr)}arr.push(Math.abs(x.c[j]/D.o[D.di[j]]-1))}};
+   for(let i=0;i<x.n;i++){const b=x.b[i];if(D.di[i]!==k){if(k>=0)flush(st,i);k=D.di[i];st=i;s=0}
+    if(k<1||b.m>=955){s=0;o[i]=0;continue}
+    if((b.m+tf)%30===0){const arr=hist.get(b.m);if(arr&&arr.length>=Math.ceil(p.lb/2)){const L=arr.slice(-p.lb);let sg=0;for(const v of L)sg+=v;sg=sg/L.length*p.vm;const op=D.o[k],pc=D.c[k-1],ub=Math.max(op,pc)*(1+sg),lb=Math.min(op,pc)*(1-sg),c=b.c;
+      if(s===0){if(c>ub)s=1;else if(sh&&c<lb)s=-1}else if(s===1){if(c<Math.max(ub,w[i]))s=sh&&c<lb?-1:0}else if(c>Math.min(lb,w[i]))s=c>ub?1:0}}
+    o[i]=s}return o}},
+ {id:'imom',cat:'Intraday research',name:'Last half-hour momentum (Gao et al.)',p:[['thr','Min first-30m move %',0,0,1,0.1]],intra:1,
+  fn(x,p,sh){const o=new Int8Array(x.n);if(!intraOnly(x))return o;const D=days(x),tf=tfMin(x);let k=-1,r=NaN,s=0;
+   for(let i=0;i<x.n;i++){const b=x.b[i];if(D.di[i]!==k){k=D.di[i];r=NaN;s=0}
+    if(k>=1&&b.m+tf===600)r=b.c/D.c[k-1]-1;
+    if(b.m+tf===930&&isFinite(r)&&Math.abs(r)*100>=p.thr)s=r>0?1:r<0&&sh?-1:0;
+    o[i]=s}return o}},
+ {id:'gapgo',cat:'Intraday research',name:'Gap and go (VWAP hold)',p:[['gap','Min gap %',2,1,8,0.5],['or','Wait minutes',15,5,30,5]],intra:1,
+  fn(x,p,sh){const o=new Int8Array(x.n);if(!intraOnly(x))return o;const D=days(x),w=x.vwap();let k=-1,s=0,g=0,H=-Infinity,L=Infinity,done=0;
+   for(let i=0;i<x.n;i++){const b=x.b[i];if(D.di[i]!==k){k=D.di[i];s=0;done=0;H=-Infinity;L=Infinity;g=k>=1?(D.o[k]/D.c[k-1]-1)*100:0}
+    if(b.m<570+p.or){H=Math.max(H,b.h);L=Math.min(L,b.l);s=0}
+    else if(b.m>=955)s=0;
+    else if(s===0&&!done){if(g>=p.gap&&b.c>H&&b.c>w[i]){s=1;done=1}else if(sh&&g<=-p.gap&&b.c<L&&b.c<w[i]){s=-1;done=1}}
+    else if(s===1&&b.c<w[i])s=0;else if(s===-1&&b.c>w[i])s=0;
+    o[i]=s}return o}},
+ {id:'gapfade',cat:'Mean reversion',name:'Gap fade to prior close',p:[['gap','Min gap %',1,0.5,5,0.5],['max','Max gap %',6,2,15,1]],intra:1,
+  fn(x,p,sh){const o=new Int8Array(x.n);if(!intraOnly(x))return o;const D=days(x);let k=-1,s=0,dir=0,first=-1;
+   for(let i=0;i<x.n;i++){const b=x.b[i];if(D.di[i]!==k){k=D.di[i];s=0;dir=0;first=i;if(k>=1){const g=(D.o[k]/D.c[k-1]-1)*100;if(Math.abs(g)>=p.gap&&Math.abs(g)<=p.max)dir=g<0?1:(sh?-1:0)}}
+    if(k<1||b.m>=955)s=0;
+    else if(i===first){if(dir>0&&b.c<D.c[k-1])s=1;else if(dir<0&&b.c>D.c[k-1])s=-1}
+    else if(s>0&&b.h>=D.c[k-1])s=0;else if(s<0&&b.l<=D.c[k-1])s=0;
+    o[i]=s}return o}},
+ {id:'dthrust',cat:'Breakout',name:'Dual Thrust (Chalek)',p:[['n','Lookback days',4,2,10,1],['k1','K1 (long)',0.5,0.2,1,0.1],['k2','K2 (short/exit)',0.5,0.2,1,0.1]],intra:1,
+  fn(x,p,sh){const o=new Int8Array(x.n);if(!intraOnly(x))return o;const D=days(x);let k=-1,s=0,up=NaN,dn=NaN;
+   for(let i=0;i<x.n;i++){const b=x.b[i];if(D.di[i]!==k){k=D.di[i];s=0;up=NaN;dn=NaN;if(k>=p.n){let HH=-Infinity,LL=Infinity,HC=-Infinity,LC=Infinity;for(let j=k-p.n;j<k;j++){HH=Math.max(HH,D.h[j]);LL=Math.min(LL,D.l[j]);HC=Math.max(HC,D.c[j]);LC=Math.min(LC,D.c[j])}const R=Math.max(HH-LC,HC-LL);up=D.o[k]+p.k1*R;dn=D.o[k]-p.k2*R}}
+    if(!isFinite(up)||b.m>=955)s=0;else if(b.c>up)s=1;else if(b.c<dn)s=sh?-1:0;
+    o[i]=s}return o}},
+ {id:'lwvb',cat:'Breakout',name:'Volatility breakout (Larry Williams)',p:[['k','K × prior day range',0.5,0.2,1.2,0.1]],intra:1,
+  fn(x,p,sh){const o=new Int8Array(x.n);if(!intraOnly(x))return o;const D=days(x);let k=-1,s=0,done=0,up=NaN,dn=NaN;
+   for(let i=0;i<x.n;i++){const b=x.b[i];if(D.di[i]!==k){k=D.di[i];s=0;done=0;up=NaN;dn=NaN;if(k>=1){const R=D.h[k-1]-D.l[k-1];up=D.o[k]+p.k*R;dn=D.o[k]-p.k*R}}
+    if(b.m>=955)s=0;else if(s===0&&!done&&isFinite(up)){if(b.c>up){s=1;done=1}else if(sh&&b.c<dn){s=-1;done=1}}
+    o[i]=s}return o}},
+ {id:'connors',cat:'Mean reversion',name:'RSI(2) pullback (Connors)',p:[['trend','Trend SMA',200,50,300,50],['ex','Exit SMA',5,3,10,1],['lo','RSI(2) below',10,2,20,2]],
+  fn(x,p,sh){const T=x.sma(p.trend),E=x.sma(p.ex),r=x.rsi(2),c=x.c;return machine(x.n,(i,s)=>{if(!isFinite(T[i])||!isFinite(r[i]))return s;if(s===0)return c[i]>T[i]&&r[i]<p.lo?1:sh&&c[i]<T[i]&&r[i]>100-p.lo?-1:0;if(s===1)return c[i]>E[i]?0:1;return c[i]<E[i]?0:-1})}},
+ {id:'ibs',cat:'Mean reversion',name:'Internal bar strength reversal',p:[['lo','Buy IBS below',0.2,0.05,0.4,0.05],['hi','Exit IBS above',0.8,0.6,0.95,0.05]],
+  fn(x,p,sh){const h=x.h,l=x.l,c=x.c;return machine(x.n,(i,s)=>{if(i<1)return 0;const v=h[i]>l[i]?(c[i]-l[i])/(h[i]-l[i]):0.5;if(s===0)return v<p.lo?1:sh&&v>p.hi?-1:0;if(s===1)return v>p.hi||c[i]>h[i-1]?0:1;return v<p.lo||c[i]<l[i-1]?0:-1})}},
+ {id:'willr',cat:'Mean reversion',name:'Williams %R reversal',p:[['n','Period',14,5,30,3],['lo','Oversold',-80,-95,-60,5],['hi','Overbought',-20,-40,-5,5]],ok:p=>p.lo<p.hi,
+  fn(x,p,sh){const w=willrArr(x,p.n);return machine(x.n,(i,s)=>{if(i<1||!isFinite(w[i-1]))return s;if(s===0)return w[i-1]<p.lo&&w[i]>=p.lo?1:sh&&w[i-1]>p.hi&&w[i]<=p.hi?-1:0;if(s===1)return w[i]>p.hi?0:1;return w[i]<p.lo?0:-1})}},
+ {id:'vwaprev',cat:'Mean reversion',name:'VWAP reversion (z-score bands)',p:[['n','Std lookback',20,10,60,5],['z','Band z',2,1,3,0.5]],intra:1,
+  fn(x,p,sh){if(!intraOnly(x))return new Int8Array(x.n);const w=x.vwap(),c=x.c,d=c.map((v,i)=>v-w[i]),sd=I.sd(d,p.n);return machine(x.n,(i,s)=>{const m=x.b[i].m;if(m>=955)return 0;if(!isFinite(sd[i]))return s;if(s===0){if(m<585||m>=945)return 0;return d[i]<-p.z*sd[i]?1:sh&&d[i]>p.z*sd[i]?-1:0}if(s===1)return c[i]>=w[i]?0:1;return c[i]<=w[i]?0:-1})}},
+ {id:'keltner',cat:'Breakout',name:'Keltner channel breakout',p:[['n','EMA length',20,10,50,5],['a','ATR period',10,5,20,5],['m','ATR ×',2,1,3,0.5]],
+  fn(x,p,sh){const e=x.ema(p.n),a=x.atr(p.a),c=x.c;return machine(x.n,(i,s)=>{if(!isFinite(e[i])||!isFinite(a[i]))return s;const u=e[i]+p.m*a[i],d=e[i]-p.m*a[i];if(s===0)return c[i]>u?1:sh&&c[i]<d?-1:0;if(s===1)return c[i]<e[i]?0:1;return c[i]>e[i]?0:-1})}},
+ {id:'squeeze',cat:'Breakout',name:'Volatility squeeze release (TTM-style)',p:[['n','Length',20,10,40,5],['kc','Keltner × ATR',1.5,1,2.5,0.25]],
+  fn(x,p,sh){const b=x.bb(p.n,2),m=b.m,a=x.atr(p.n),H=x.hh(p.n),L=x.ll(p.n),c=x.c,on=new Uint8Array(x.n);for(let i=0;i<x.n;i++)if(isFinite(b.up[i])&&isFinite(a[i]))on[i]=b.up[i]<m[i]+p.kc*a[i]&&b.lo[i]>m[i]-p.kc*a[i]?1:0;
+   return machine(x.n,(i,s)=>{if(i<1||!isFinite(a[i])||!isFinite(H[i])||!isFinite(m[i]))return s;const v=c[i]-((H[i]+L[i])/2+m[i])/2;if(s===0){if(on[i-1]&&!on[i])return v>0?1:sh&&v<0?-1:0;return 0}if(s===1)return v<0?0:1;return v>0?0:-1})}},
+ {id:'cci',cat:'Breakout',name:'CCI momentum (Lambert)',p:[['n','Period',20,10,40,5],['lv','Level',100,50,200,25]],
+  fn(x,p,sh){const v=cciArr(x,p.n);return machine(x.n,(i,s)=>{if(i<1||!isFinite(v[i-1]))return s;if(s===0)return v[i-1]<=p.lv&&v[i]>p.lv?1:sh&&v[i-1]>=-p.lv&&v[i]<-p.lv?-1:0;if(s===1)return v[i]<0?0:1;return v[i]>0?0:-1})}},
+ {id:'supertrend',cat:'Trend',name:'Supertrend (Seban)',p:[['n','ATR period',10,5,20,1],['m','Multiplier',3,1,5,0.5]],
+  fn(x,p,sh){const a=x.atr(p.n),h=x.h,l=x.l,c=x.c,o=new Int8Array(x.n);let fu=NaN,fl=NaN,dir=0;for(let i=0;i<x.n;i++){if(!isFinite(a[i]))continue;const mid=(h[i]+l[i])/2,bu=mid+p.m*a[i],bl=mid-p.m*a[i];
+   if(dir===0){fu=bu;fl=bl;dir=1}else{fu=(bu<fu||c[i-1]>fu)?bu:fu;fl=(bl>fl||c[i-1]<fl)?bl:fl;if(dir===1&&c[i]<fl)dir=-1;else if(dir===-1&&c[i]>fu)dir=1}
+   o[i]=dir>0?1:sh?-1:0}return o}},
+ {id:'psar',cat:'Trend',name:'Parabolic SAR (Wilder)',p:[['af','Step',0.02,0.01,0.05,0.01],['mx','Max step',0.2,0.1,0.4,0.05]],
+  fn(x,p,sh){const h=x.h,l=x.l,c=x.c,o=new Int8Array(x.n);if(x.n<3)return o;let up=c[1]>=c[0],sar=up?l[0]:h[0],ep=up?h[1]:l[1],af=p.af;o[1]=up?1:sh?-1:0;
+   for(let i=2;i<x.n;i++){sar=sar+af*(ep-sar);if(up){sar=Math.min(sar,l[i-1],l[i-2]);if(l[i]<sar){up=false;sar=ep;ep=l[i];af=p.af}else if(h[i]>ep){ep=h[i];af=Math.min(af+p.af,p.mx)}}
+    else{sar=Math.max(sar,h[i-1],h[i-2]);if(h[i]>sar){up=true;sar=ep;ep=h[i];af=p.af}else if(l[i]<ep){ep=l[i];af=Math.min(af+p.af,p.mx)}}
+    o[i]=up?1:sh?-1:0}return o}},
+ {id:'hma',cat:'Trend',name:'Hull moving average cross',p:[['f','Fast',9,5,30,2],['s','Slow',21,10,60,5]],ok:p=>p.f<p.s,
+  fn(x,p,sh){const f=x.hma(p.f),s=x.hma(p.s);return regime(x.n,i=>f[i]>s[i]?1:f[i]<s[i]&&sh?-1:0)}},
+ {id:'heikin',cat:'Trend',name:'Heikin-Ashi trend',p:[['k','Candles in a row',2,1,5,1]],
+  fn(x,p,sh){const o=x.o,h=x.h,l=x.l,c=x.c,out=new Int8Array(x.n);let ho=(o[0]+c[0])/2,hc=(o[0]+h[0]+l[0]+c[0])/4,ru=0,rd=0,s=0;
+   for(let i=0;i<x.n;i++){if(i>0){ho=(ho+hc)/2;hc=(o[i]+h[i]+l[i]+c[i])/4}const bull=hc>ho,bear=hc<ho;ru=bull?ru+1:0;rd=bear?rd+1:0;
+    if(s===0)s=ru>=p.k?1:sh&&rd>=p.k?-1:0;else if(s===1){if(!bull)s=0}else if(!bear)s=0;out[i]=s}return out}},
+ {id:'adx',cat:'Trend',name:'ADX trend + DI cross (Wilder)',p:[['n','Period',14,7,28,7],['th','Min ADX',25,15,40,5]],
+  fn(x,p,sh){const d=x.dmi(p.n);return machine(x.n,(i,s)=>{const P=d.p[i],M=d.m[i],A=d.a[i];if(!isFinite(A))return s;if(s===0)return P>M&&A>p.th?1:sh&&M>P&&A>p.th?-1:0;if(s===1)return P<M?0:1;return P>M?0:-1})}},
+ {id:'ichimoku',cat:'Trend',name:'Ichimoku cloud (Hosoda)',p:[['t','Tenkan',9,5,20,1],['k','Kijun',26,15,60,5],['sb','Senkou B',52,30,120,10]],ok:p=>p.t<p.k&&p.k<p.sb,
+  fn(x,p,sh){const ht=x.hh(p.t),lt=x.ll(p.t),hk=x.hh(p.k),lk=x.ll(p.k),hb=x.hh(p.sb),lb=x.ll(p.sb),c=x.c,tk=i=>(ht[i]+lt[i])/2,kj=i=>(hk[i]+lk[i])/2;
+   return machine(x.n,(i,s)=>{if(i<p.k)return s;const j=i-p.k,A=(tk(j)+kj(j))/2,B=(hb[j]+lb[j])/2,t=tk(i),k=kj(i);if(!isFinite(A)||!isFinite(B)||!isFinite(t)||!isFinite(k))return s;const top=Math.max(A,B),bot=Math.min(A,B);
+    if(s===0)return t>k&&c[i]>top?1:sh&&t<k&&c[i]<bot?-1:0;if(s===1)return t<k||c[i]<bot?0:1;return t>k||c[i]>top?0:-1})}},
+ {id:'custom',cat:'Custom',name:'Custom formula',p:[['P1','P1',20,5,50,5],['P2','P2',50,20,200,10],['P3','P3',14,2,30,2]],cust:1,
   fn(x,p,sh){const R=custRules(),eL=compile(R.eL),xL=compile(R.xL),eS=compile(R.eS),xS=compile(R.xS),E=env(x,p),t=f=>!!(f&&f(E));
    return machine(x.n,(i,s)=>{E.i=i;if(s===0)return t(eL)?1:sh&&t(eS)?-1:0;if(s===1)return t(xL)?0:1;return t(xS)?0:-1})}}
 ];
@@ -316,6 +407,10 @@ const IND={
  Bollinger:{d:'20,2',pane:0,f:(x,a)=>{const b=x.bb(a[0],a[1]);return [[b.up,'BB up'],[b.m,'BB mid'],[b.lo,'BB low']]}},
  VWAP:{d:'',pane:0,f:x=>[[x.vwap(),'VWAP']]},
  Donchian:{d:'20',pane:0,f:(x,a)=>[[x.hh(a[0]),'DC up'],[x.ll(a[0]),'DC low']]},
+ Keltner:{d:'20,10,2',pane:0,f:(x,a)=>{const e=x.ema(a[0]),t=x.atr(a[1]);return [[e.map((v,i)=>v+a[2]*t[i]),'KC up'],[e,'KC mid'],[e.map((v,i)=>v-a[2]*t[i]),'KC low']]}},
+ HMA:{d:'21',pane:0,f:(x,a)=>[[x.hma(a[0]),'HMA '+a[0]]]},
+ CCI:{d:'20',pane:1,f:(x,a)=>[[cciArr(x,a[0]),'CCI '+a[0]]],lv:[-100,100]},
+ 'Williams %R':{d:'14',pane:1,f:(x,a)=>[[willrArr(x,a[0]),'%R '+a[0]]],lv:[-80,-20]},
  RSI:{d:'14',pane:1,f:(x,a)=>[[x.rsi(a[0]),'RSI '+a[0]]],lv:[30,70]},
  MACD:{d:'12,26,9',pane:1,f:(x,a)=>{const m=x.macd(a[0],a[1],a[2]);return [[m.m,'MACD'],[m.s,'Signal'],[m.h,'Hist','h']]}},
  Stochastic:{d:'14,3',pane:1,f:(x,a)=>{const s=x.stoch(a[0],a[1]);return [[s.k,'%K'],[s.d,'%D']]},lv:[20,80]},
@@ -338,7 +433,7 @@ function renderChart(keepView){
  const add=(arr,title,p,type)=>{const col=COLORS[ci++%COLORS.length];const s=type==='h'?ch.addSeries(LW.HistogramSeries,{color:'rgba(79,140,255,.5)',priceLineVisible:false,lastValueVisible:false,title},p):ch.addSeries(LW.LineSeries,{color:col,lineWidth:1.5,priceLineVisible:false,lastValueVisible:true,title,crosshairMarkerVisible:false},p);s.setData(lineData(T,arr));return s};
  for(const it of inds){const D=IND[it.t];if(!D)continue;const a=(it.a||D.d).split(',').filter(Boolean).map(Number);try{const p=D.pane?pane++:0;let first=null;for(const [arr,t,ty] of D.f(x,a)){const s=add(arr,t,p,ty);first=first||s}if(D.lv&&first)for(const v of D.lv)first.createPriceLine({price:v,color:'#555',lineWidth:1,lineStyle:2,axisLabelVisible:false})}catch(e){console.warn(e)}}
  for(const c of custInds){try{const p=c.pane?pane++:0;add(evalSeries(x,c.expr,{}),c.name,p)}catch(e){status('Custom indicator "'+c.name+'": '+e.message,true)}}
- try{ch.panes().forEach((p,i)=>{if(i>0)p.setHeight(110)})}catch(e){}
+ try{ch.panes().forEach((p,i)=>p.setStretchFactor(i===0?3:1))}catch(e){}
  if($('showMk').checked&&S.bt&&S.bt.key===S.key){const mk=[];for(const t of S.bt.r.trades){mk.push({time:T[t.ei],position:t.side>0?'belowBar':'aboveBar',color:t.side>0?'#26a69a':'#ef5350',shape:t.side>0?'arrowUp':'arrowDown',text:t.side>0?'B':'S'});mk.push({time:T[t.xi],position:t.side>0?'aboveBar':'belowBar',color:'#c9d1d9',shape:'circle',text:t.why==='signal'?'':t.why})}
   mk.sort((a,b)=>a.time-b.time);if(mk.length<=6000)LW.createSeriesMarkers(candle,mk)}
  if(vr)ch.timeScale().setVisibleLogicalRange(vr);else{const n=S.bars.length;ch.timeScale().setVisibleLogicalRange({from:Math.max(0,n-300),to:n+5})}
@@ -527,7 +622,7 @@ function init(){
  $('indAdd').onclick=()=>{inds.push({t:$('indSel').value,a:$('indPar').value.trim()});LS.set('inds',inds);renderInds();renderChart(1)};
  $('ciAdd').onclick=()=>{const name=$('ciName').value.trim()||'Custom',expr=$('ciExpr').value.trim();if(!expr)return;if(S.x)try{evalSeries(S.x,expr,{})}catch(e){return status('Formula error: '+e.message,true)}custInds.push({name,expr,pane:+$('ciPane').value});LS.set('custInds',custInds);renderInds();renderChart(1)};
  renderInds();$('showMk').onchange=()=>renderChart(1);
- for(const s of STRATS){const o=document.createElement('option');o.value=s.id;o.textContent=s.name;$('stSel').appendChild(o)}$('stSel').value=LS.get('strat','ema');
+ for(const cat of ['Trend','Mean reversion','Breakout','Intraday research','Custom']){const g=document.createElement('optgroup');g.label=cat;for(const s of STRATS.filter(z=>z.cat===cat)){const o=document.createElement('option');o.value=s.id;o.textContent=s.name;g.appendChild(o)}$('stSel').appendChild(g)}$('stSel').value=LS.get('strat','ema');
  const cr=LS.get('cust',{eL:'ema(P1) > ema(P2) && rsi(P3) < 70',xL:'c < ema(P1)',eS:'',xS:''});$('cxEL').value=cr.eL;$('cxXL').value=cr.xL;$('cxES').value=cr.eS;$('cxXS').value=cr.xS;
  $('stSel').onchange=()=>{LS.set('strat',$('stSel').value);buildParams();updateSignal()};buildParams();
  const ex=LS.get('exec',null);const eIds=['oCap','oSize','oComm','oSlip','oStop','oTP'];if(ex){eIds.forEach(i=>{if(ex[i]!=null)$(i).value=ex[i]});$('oShort').checked=!!ex.oShort;$('oEOD').checked=ex.oEOD!==false}

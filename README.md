@@ -1,6 +1,6 @@
 # TradeLab
 
-Personal day-trading research page: live Alpaca market data, built-in and custom indicators, 9 strategies plus a custom-formula strategy, backtester, grid optimizer and walk-forward test.
+Personal day-trading research page: live Alpaca market data, built-in and custom indicators, 29 strategies plus a custom-formula strategy (20 added from published research; see STRATEGIES.md), backtester, grid optimizer and walk-forward test.
 
 **Live page:** https://leolocpham.github.io/tradelab/
 
@@ -18,7 +18,7 @@ Personal day-trading research page: live Alpaca market data, built-in and custom
 ## Daily bot (paper trading)
 `bot/run.py` runs on GitHub Actions every trading day (`.github/workflows/bot.yml`):
 1. **9:45 ET screen:** stocks priced over $5, averaging over $20M/day in traded value, gapping ≥2% with ≥1.5× relative volume.
-2. **Strategy fit:** every strategy is backtested on each candidate's prior 25 trading days of 5-min bars. Each stock keeps its best strategy if it passes minimum trades, profit factor and Sharpe. The top 5 are traded.
+2. **Strategy fit:** all 29 strategies (see STRATEGIES.md) are backtested on each candidate's prior 25 trading days of 5-min bars. Each stock keeps its best strategy if it passes minimum trades, profit factor and Sharpe. The top 5 are traded.
 3. **Trading:** every 5 minutes the chosen strategy's signal drives market orders in the Alpaca **paper** account, with a 1.5% stop. No new entries in the last 15 minutes. Everything is flattened 5 minutes before the close.
 4. Results go to `data/latest.json`, `data/days/` and `data/equity.csv`, and are shown in the **Bot** tab.
 
