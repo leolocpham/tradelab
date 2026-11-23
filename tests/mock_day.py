@@ -72,6 +72,7 @@ class FakeAlpaca:
         self.entry = getattr(self, "entry", {}); self.entry[s] = px
         self.fill_log.append({"symbol": s, "qty": str(qty), "price": str(px), "side": side})
     def fills(self, day): return self.fill_log
+    def assets(self): return [{"symbol": s, "name": f"{s} Holdings Inc", "tradable": True} for s in self.syms[:-2]] + [{"symbol": s, "name": f"Tradr 2X Long {s} Daily ETF", "tradable": True} for s in self.syms[-2:]]
     def most_actives(self, top=100): return self.syms[:20]
     def movers(self, top=50): raise RuntimeError("403 not in plan (simulated)")
     def snapshots(self, syms, feed="iex"):

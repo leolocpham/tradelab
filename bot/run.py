@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 TF_MS = {"1Min": 60_000, "5Min": 300_000, "15Min": 900_000}
 SYM_RE = re.compile(r"^[A-Z]{1,5}$")
+FUND_RE = re.compile(r"\b(ETF|ETN|ETP|FUND|INDEX|DAILY|LEVERAGED|LEVERAGE|INVERSE|ULTRA|ULTRAPRO|ULTRASHORT|BULL|BEAR|1\.5X|2X|3X|-1X|-2X|-3X|PROSHARES|DIREXION|TRADR|DEFIANCE|GRANITESHARES|T-REX|YIELDMAX|ROUNDHILL|ISHARES|SPDR|VANGUARD|INVESCO|GLOBAL X|VOLATILITY SHARES|REX SHARES|MICROSECTORS)\b", re.I)
 MAX_RUN_MIN = 340  # GitHub job limit is 360
 
 
@@ -79,6 +80,9 @@ class Alpaca:
     def submit(self, sym, qty, side, cid):
         return self._req("POST", self.TRADE, "/v2/orders", body={
             "symbol": sym, "qty": str(qty), "side": side, "type": "market", "time_in_force": "day", "client_order_id": cid})
+
+    def assets(self):
+        return self._req("GET", self.TRADE, "/v2/assets", {"status": "active", "asset_class": "us_equity"})
 
     def fills(self, day):
         return self._req("GET", self.TRADE, "/v2/account/activities/FILL", {"date": day, "page_size": 100})
@@ -204,6 +208,18 @@ class Bot:
             except Exception as e:
                 self.log(f"screener {name} unavailable: {e}")
         syms = sorted(s for s in syms if SYM_RE.match(s))
+        dropped = 0
+        try:  # keep tradable common stocks; drop ETFs / leveraged & inverse products
+            meta = {a["symbol"]: a for a in api.assets()}
+            keep = []
+            for s in syms:
+                a = meta.get(s)
+                if not a or not a.get("tradable"): dropped += 1; continue
+                if cfg.get("exclude_funds", True) and FUND_RE.search(a.get("name") or ""): dropped += 1; continue
+                keep.append(s)
+            syms = keep
+        except Exception as e:
+            self.log(f"asset list unavailable: {e}")
         snaps = api.snapshots(syms, "iex")
         elapsed = 1.0 if (self.test and now >= self.close_t) else max((min(now, self.close_t) - self.open_t).total_seconds() / 60, 5) / 390
         rows = []
@@ -214,19 +230,22 @@ class Bot:
             if not pdb.get("c") or not pdb.get("v"): continue
             px = lt["p"]; gap = db["o"] / pdb["c"] - 1
             rvol = db["v"] / (pdb["v"] * elapsed)
-            rows.append({"sym": s, "price": px, "gap": gap, "rvol": rvol, "chg": px / pdb["c"] - 1})
-        # 20-day average dollar volume from SIP daily bars (up to yesterday)
+            rows.append({"sym": s, "price": px, "open": db["o"], "gap": gap, "rvol": rvol, "chg": px / pdb["c"] - 1})
+        # split-adjusted SIP daily bars (up to yesterday): prior close for the gap + 20-day average dollar volume
         if rows:
             daily = api.bars([r["sym"] for r in rows], "1Day", self.day_dt - timedelta(days=45), self.open_t - timedelta(hours=9), "sip")
             for r in rows:
                 d = daily.get(r["sym"], [])[-20:]
                 r["adv"] = sum(b[4] * b[5] for b in d) / len(d) if d else 0
+                if d:
+                    r["gap"] = r["open"] / d[-1][4] - 1; r["chg"] = r["price"] / d[-1][4] - 1
+        mx = cfg.get("max_abs_gap_pct", 35)
         ok = [r for r in rows if cfg["min_price"] <= r["price"] <= cfg["max_price"] and r["adv"] >= cfg["min_avg_dollar_volume"]
-              and abs(r["gap"]) * 100 >= cfg["min_abs_gap_pct"] and r["rvol"] >= cfg["min_rvol"]]
+              and cfg["min_abs_gap_pct"] <= abs(r["gap"]) * 100 <= mx and r["rvol"] >= cfg["min_rvol"]]
         for r in ok: r["score"] = abs(r["gap"]) * 100 * min(r["rvol"], 10)
         ok.sort(key=lambda r: -r["score"])
         cands = ok[: cfg["candidates_to_test"]]
-        self.log(f"universe {len(syms)} ({', '.join(src) or 'fallback list'}) -> snapshots {len(rows)} -> passed filters {len(ok)}")
+        self.log(f"universe {len(syms)} stocks after dropping {dropped} funds/untradable ({', '.join(src) or 'fallback list'}) -> snapshots {len(rows)} -> passed filters {len(ok)}")
 
         # backtest every strategy on each candidate's recent history (prior days only)
         hist = self.history([r["sym"] for r in cands])

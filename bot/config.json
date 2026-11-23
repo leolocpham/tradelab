@@ -7,6 +7,8 @@
   "max_price": 1500,
   "min_avg_dollar_volume": 20000000,
   "min_abs_gap_pct": 2.0,
+  "max_abs_gap_pct": 35,
+  "exclude_funds": true,
   "min_rvol": 1.5,
   "lookback_days": 25,
   "timeframe": "5Min",
