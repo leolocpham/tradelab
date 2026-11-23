@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TradeLab</title>
+<script src="https://unpkg.com/lightweight-charts@5.0.9/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{--bg:#0d1117;--pn:#161b22;--pn2:#1c2330;--ln:#30363d;--tx:#e6edf3;--mu:#8b949e;--up:#26a69a;--dn:#ef5350;--ac:#4f8cff;--wa:#d29922}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:13px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;background:var(--pn);border-bottom:1px solid var(--ln)}
+.logo{font-weight:700;font-size:16px;margin-right:8px}.logo span{color:var(--ac)}
+input,select,button,textarea{background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:6px;padding:5px 7px;font:inherit}
+input[type=number]{width:72px}input[type=checkbox]{width:auto}
+textarea{width:100%;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+button{cursor:pointer;background:var(--pn2)}button:hover{border-color:var(--ac)}
+button.pri{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
+button.on{background:var(--dn);border-color:var(--dn);color:#fff}
+label{color:var(--mu);display:inline-flex;align-items:center;gap:4px}
+nav{display:flex;gap:2px;padding:0 12px;background:var(--pn);border-bottom:1px solid var(--ln);overflow-x:auto}
+nav button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:9px 12px;color:var(--mu)}
+nav button.act{color:var(--tx);border-bottom-color:var(--ac)}
+main{padding:12px}.tab{display:none}.tab.act{display:block}
+#status{margin-left:auto;color:var(--mu);max-width:45%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#status.err{color:var(--dn)}
+.chartwrap{display:grid;grid-template-columns:1fr 300px;gap:12px}
+#chart{height:calc(100vh - 140px);min-height:420px;border:1px solid var(--ln);border-radius:8px;overflow:hidden}
+.side{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--pn);border:1px solid var(--ln);border-radius:8px;padding:10px}
+.card h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mu)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin:10px 0}
+.kpi{background:var(--pn);border:1px solid var(--ln);border-radius:8px;padding:8px 10px}
+.kpi b{display:block;font-size:18px}.kpi small{color:var(--mu)}
+.pos{color:var(--up)}.neg{color:var(--dn)}.mu{color:var(--mu)}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{padding:5px 7px;border-bottom:1px solid var(--ln);text-align:right;white-space:nowrap}
+th{color:var(--mu);font-weight:600;position:sticky;top:0;background:var(--pn)}
+th:first-child,td:first-child{text-align:left}
+tr.click{cursor:pointer}tr.click:hover td{background:var(--pn2)}
+.tscroll{max-height:420px;overflow:auto;border:1px solid var(--ln);border-radius:8px}
+.eqc{height:340px;border:1px solid var(--ln);border-radius:8px;overflow:hidden;margin:10px 0}
+.sig{font-size:22px;font-weight:700}
+.ind{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--ln)}
+.ind button{padding:1px 7px}
+.bar{height:6px;background:var(--pn2);border-radius:3px;overflow:hidden;margin:6px 0}.bar i{display:block;height:100%;width:0;background:var(--ac)}
+code{background:var(--pn2);padding:1px 4px;border-radius:4px;font-size:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.note{color:var(--mu);font-size:12px}
+@media(max-width:900px){.chartwrap,.grid2{grid-template-columns:1fr}#chart{height:60vh}#status{max-width:100%;margin-left:0}}
+</style>
+</head>
+<body>
+<header>
+ <div class="logo">Trade<span>Lab</span></div>
+ <input id="sym" size="7" title="Symbol (use DEMO for synthetic data)">
+ <select id="tf"><option>1Min</option><option selected>5Min</option><option>15Min</option><option>30Min</option><option>1Hour</option><option>1Day</option></select>
+ <select id="feed" title="IEX = free real-time; SIP = all exchanges (free plan: 15-min delayed)"><option value="iex">IEX</option><option value="sip">SIP</option></select>
+ <input type="date" id="dFrom"> <input type="date" id="dTo">
+ <label><input type="checkbox" id="rth" checked>RTH only</label>
+ <button class="pri" id="bLoad">Load</button>
+ <button id="bLive">Go live</button>
+ <div id="status">Ready</div>
+</header>
+<nav id="tabs">
+ <button data-t="tChart" class="act">Chart</button><button data-t="tBT">Backtest</button><button data-t="tOpt">Optimizer</button><button data-t="tWF">Walk-forward</button><button data-t="tData">Data</button><button data-t="tSet">Settings</button>
+</nav>
+<main>
+<!-- CHART -->
+<section id="tChart" class="tab act">
+ <div class="chartwrap">
+  <div id="chart"></div>
+  <div class="side">
+   <div class="card"><h3>Quote</h3><div id="quote" class="sig mu">—</div><div id="quoteSub" class="note"></div></div>
+   <div class="card"><h3>Strategy signal</h3><div id="sigBox" class="sig mu">—</div><div id="sigSub" class="note">Uses the strategy and settings on the Backtest tab.</div>
+    <label style="margin-top:6px"><input type="checkbox" id="showMk" checked>Show backtest trades on chart</label></div>
+   <div class="card"><h3>Indicators</h3>
+    <div class="row"><select id="indSel"></select><input id="indPar" size="6" placeholder="params"><button id="indAdd">Add</button></div>
+    <div id="indList"></div></div>
+   <div class="card"><h3>Custom indicator</h3>
+    <div class="row"><input id="ciName" size="10" placeholder="Name"><select id="ciPane"><option value="0">Overlay</option><option value="1">Own pane</option></select></div>
+    <textarea id="ciExpr" rows="2" placeholder="e.g. ema(9) - ema(21)"></textarea>
+    <div class="row" style="margin-top:6px"><button id="ciAdd">Add custom</button><span class="note">Helpers listed in Settings</span></div></div>
+  </div>
+ </div>
+</section>
+<!-- BACKTEST -->
+<section id="tBT" class="tab">
+ <div class="grid2">
+  <div class="card"><h3>Strategy</h3>
+   <div class="row"><select id="stSel"></select></div>
+   <div id="stPars" class="row"></div>
+   <div id="custBox" style="display:none">
+    <div class="note">Rules are checked at each bar close; orders fill at the next bar open. Use <code>P1</code> <code>P2</code> <code>P3</code> as tunable numbers.</div>
+    <label>Long entry</label><textarea id="cxEL" rows="2"></textarea>
+    <label>Long exit</label><textarea id="cxXL" rows="2"></textarea>
+    <label>Short entry (needs Allow shorts)</label><textarea id="cxES" rows="1"></textarea>
+    <label>Short exit</label><textarea id="cxXS" rows="1"></textarea>
+   </div>
+  </div>
+  <div class="card"><h3>Execution</h3>
+   <div class="row"><label>Capital $<input type="number" id="oCap" value="25000" style="width:90px"></label><label>Size % equity<input type="number" id="oSize" value="100"></label></div>
+   <div class="row"><label>Commission $/sh<input type="number" id="oComm" value="0" step="0.001"></label><label>Slippage bps<input type="number" id="oSlip" value="2" step="0.5"></label></div>
+   <div class="row"><label>Stop %<input type="number" id="oStop" value="0" step="0.1"></label><label>Target %<input type="number" id="oTP" value="0" step="0.1"></label><span class="note">0 = off</span></div>
+   <div class="row"><label><input type="checkbox" id="oShort">Allow shorts</label><label><input type="checkbox" id="oEOD" checked>Flat at end of day (intraday)</label></div>
+   <div class="row"><button class="pri" id="bRun">Run backtest</button><button id="bAll">Compare all strategies</button><button id="bTradesCsv">Export trades CSV</button></div>
+  </div>
+ </div>
+ <div id="btKpis" class="kpis"></div>
+ <div id="btEq" class="eqc" style="display:none"></div>
+ <div id="cmpBox" style="display:none"><div class="card"><h3>All strategies — default settings, same data and execution</h3><div class="tscroll" id="cmpTbl"></div></div></div>
+ <div class="card" style="margin-top:10px"><h3>Trades</h3><div class="tscroll" id="trTbl"><span class="note">Run a backtest to see trades.</span></div></div>
+</section>
+<!-- OPTIMIZER -->
+<section id="tOpt" class="tab">
+ <div class="card"><h3>Grid optimizer — <span id="optName"></span></h3>
+  <div class="note" style="margin-bottom:8px">Strategy and execution settings come from the Backtest tab. Tick the parameters to vary. These ranges are also used by Walk-forward.</div>
+  <div id="rngTbl"></div>
+  <div class="row" style="margin-top:8px"><label>Optimize for<select id="optObj"><option value="sharpe">Sharpe</option><option value="tot">Total return</option><option value="calmar">CAGR / Max DD</option><option value="pf">Profit factor</option></select></label>
+   <label>Min trades<input type="number" id="optMin" value="10"></label><span id="optCount" class="note"></span>
+   <button class="pri" id="bOpt">Run optimizer</button><button id="bOptStop">Stop</button></div>
+  <div class="bar"><i id="optBar"></i></div>
+ </div>
+ <div class="card" style="margin-top:10px"><h3>Top results (click a row to load it into Backtest)</h3><div class="tscroll" id="optTbl"><span class="note">No results yet.</span></div></div>
+</section>
+<!-- WALK-FORWARD -->
+<section id="tWF" class="tab">
+ <div class="card"><h3>Walk-forward test — <span id="wfName"></span></h3>
+  <div class="note" style="margin-bottom:8px">Each fold optimizes on an in-sample window using the Optimizer ranges, then trades the best settings on the next unseen window. The out-of-sample result shows whether the optimization holds up on new data.</div>
+  <div class="row"><label>Folds<input type="number" id="wfK" value="5" min="2"></label><label>In-sample %<input type="number" id="wfIS" value="70" min="30" max="90"></label>
+   <label>Mode<select id="wfMode"><option value="roll">Rolling</option><option value="anch">Anchored</option></select></label>
+   <label>Optimize for<select id="wfObj"><option value="sharpe">Sharpe</option><option value="tot">Total return</option><option value="calmar">CAGR / Max DD</option><option value="pf">Profit factor</option></select></label>
+   <label>Min trades<input type="number" id="wfMin" value="5"></label>
+   <button class="pri" id="bWF">Run walk-forward</button></div>
+  <div class="bar"><i id="wfBar"></i></div>
+ </div>
+ <div id="wfKpis" class="kpis"></div>
+ <div id="wfEq" class="eqc" style="display:none"></div>
+ <div class="card"><h3>Folds</h3><div class="tscroll" id="wfTbl"><span class="note">No results yet.</span></div></div>
+</section>
+<!-- DATA -->
+<section id="tData" class="tab">
+ <div class="card"><h3>Local bar database (IndexedDB in this browser)</h3>
+  <div class="note" style="margin-bottom:8px">Bars from Alpaca are saved here, so a later load only downloads the missing dates. The data stays on this computer and this browser.</div>
+  <div class="tscroll" id="dbTbl"></div>
+  <div class="row" style="margin-top:8px"><button id="bDbRef">Refresh</button><button id="bBarsCsv">Export loaded bars CSV</button></div>
+ </div>
+ <div class="card" style="margin-top:10px"><h3>Import CSV</h3>
+  <div class="note" style="margin-bottom:8px">Columns: time (ISO or epoch ms), open, high, low, close, volume. A header row is fine. Saved as feed "csv".</div>
+  <div class="row"><input id="csvSym" size="7" placeholder="Symbol"><select id="csvTf"><option>1Min</option><option selected>5Min</option><option>15Min</option><option>30Min</option><option>1Hour</option><option>1Day</option></select><input type="file" id="csvFile" accept=".csv,.txt"><button id="bCsv">Import</button></div>
+ </div>
+</section>
+<!-- SETTINGS -->
+<section id="tSet" class="tab">
+ <div class="grid2">
+ <div class="card"><h3>Alpaca API keys</h3>
+  <div class="note" style="margin-bottom:8px">Free paper-trading keys work. Create them at alpaca.markets → Paper account → API Keys. Keys are sent only to Alpaca. Tick Remember to keep them in this browser's local storage.</div>
+  <div class="row"><input id="kId" placeholder="API Key ID" style="flex:1"></div>
+  <div class="row"><input id="kSec" type="password" placeholder="Secret Key" style="flex:1"></div>
+  <div class="row"><label><input type="checkbox" id="kRem">Remember on this computer</label><button id="bKeyTest">Test connection</button><button id="bKeyClr">Forget keys</button></div>
+  <div class="note">No keys? Use the symbol <code>DEMO</code> for synthetic data to try every feature.</div>
+ </div>
+ <div class="card"><h3>Formula helpers (custom indicators and custom strategy)</h3>
+  <div class="note">
+  Prices now: <code>c o h l v</code> · Bars ago: <code>C(1) H(2) L(1) O(0) V(0)</code><br>
+  <code>sma(n,ago)</code> <code>ema(n,ago)</code> <code>rsi(n,ago)</code> <code>atr(n,ago)</code> <code>adx(n,ago)</code> <code>vwap(ago)</code><br>
+  <code>hh(n,ago)</code> highest high · <code>ll(n,ago)</code> lowest low (include current bar; use ago=1 for breakouts)<br>
+  <code>bbu(n,k,ago)</code> <code>bbl(n,k,ago)</code> Bollinger · <code>macd(f,s,ago)</code> <code>macds(f,s,sig,ago)</code> · <code>stoch(n,ago)</code><br>
+  <code>tod</code> minutes since midnight ET (9:30 = 570) · <code>P1 P2 P3</code> tunable numbers · JS math: <code>Math.abs()</code> <code>&&</code> <code>||</code><br>
+  Example cross: <code>ema(9) &gt; ema(21) &amp;&amp; ema(9,1) &lt;= ema(21,1)</code></div>
+ </div>
+ </div>
+</section>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const LW=window.LightweightCharts;
+const TF={'1Min':6e4,'5Min':3e5,'15Min':9e5,'30Min':18e5,'1Hour':36e5,'1Day':864e5};
+const LS={get(k,d){try{const v=localStorage.getItem('tl.'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('tl.'+k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem('tl.'+k)}catch(e){}}};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const S={bars:[],meta:null,x:null,bt:null,opt:[],stop:false};
+function status(m,err){const s=$('status');s.textContent=m;s.title=m;s.className=err?'err':''}
+const pct=(v,d=1)=>isFinite(v)?(v*100).toFixed(d)+'%':'—';
+const num=(v,d=2)=>isFinite(v)?(+v).toFixed(d):(v===Infinity?'∞':'—');
+const cls=v=>v>0?'pos':v<0?'neg':'';
+function download(name,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/csv'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+
+/* ---------- Eastern time ---------- */
+const etF=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'});
+const offC=new Map();
+function etOff(t){const k=Math.floor(t/36e5);let o=offC.get(k);if(o===undefined){const p={};for(const x of etF.formatToParts(new Date(k*36e5)))p[x.type]=x.value;o=Date.UTC(+p.year,+p.month-1,+p.day,+p.hour%24)-k*36e5;offC.set(k,o)}return o}
+function prep(b){const l=b.t+etOff(b.t),D=new Date(l);b.d=D.toISOString().slice(0,10);b.m=D.getUTCHours()*60+D.getUTCMinutes();b.lt=Math.floor(l/1000);return b}
+function etMidnight(ds){const [y,m,d]=ds.split('-').map(Number);const u=Date.UTC(y,m-1,d);return u-etOff(u+12*36e5)}
+const fmtT=b=>b?b.d+(S.meta&&S.meta.tf!=='1Day'?' '+String(Math.floor(b.m/60)).padStart(2,'0')+':'+String(b.m%60).padStart(2,'0'):''):'';
+
+/* ---------- Indicators ---------- */
+const nanArr=n=>new Float64Array(n).fill(NaN);
+const I={
+ sma(a,n){const o=nanArr(a.length);let s=0,f=-1;for(let i=0;i<a.length;i++){const x=a[i];if(!isFinite(x))continue;if(f<0)f=i;s+=x;const c=i-f+1;if(c>n)s-=a[i-n];if(c>=n)o[i]=s/n}return o},
+ ema(a,n){const o=nanArr(a.length),k=2/(n+1);let s=0,c=0,p=NaN;for(let i=0;i<a.length;i++){const x=a[i];if(!isFinite(x))continue;if(c<n){s+=x;c++;if(c===n){p=s/n;o[i]=p}}else{p=x*k+p*(1-k);o[i]=p}}return o},
+ rma(a,n){const o=nanArr(a.length);let s=0,c=0,p=NaN;for(let i=0;i<a.length;i++){const x=a[i];if(!isFinite(x))continue;if(c<n){s+=x;c++;if(c===n){p=s/n;o[i]=p}}else{p=(p*(n-1)+x)/n;o[i]=p}}return o},
+ sd(a,n){const o=nanArr(a.length);let s=0,q=0;for(let i=0;i<a.length;i++){s+=a[i];q+=a[i]*a[i];if(i>=n){s-=a[i-n];q-=a[i-n]*a[i-n]}if(i>=n-1){const m=s/n;o[i]=Math.sqrt(Math.max(q/n-m*m,0))}}return o},
+ rsi(c,n){const o=nanArr(c.length);let g=0,l=0;for(let i=1;i<c.length;i++){const d=c[i]-c[i-1],u=d>0?d:0,w=d<0?-d:0;if(i<=n){g+=u;l+=w;if(i===n){g/=n;l/=n}else continue}else{g=(g*(n-1)+u)/n;l=(l*(n-1)+w)/n}o[i]=l===0?100:100-100/(1+g/l)}return o},
+ tr(x){const o=new Float64Array(x.n);for(let i=0;i<x.n;i++){const pc=i?x.c[i-1]:x.c[i];o[i]=Math.max(x.h[i]-x.l[i],Math.abs(x.h[i]-pc),Math.abs(x.l[i]-pc))}return o},
+ hi(a,n){const o=nanArr(a.length);for(let i=n-1;i<a.length;i++){let m=-Infinity;for(let j=i-n+1;j<=i;j++)if(a[j]>m)m=a[j];o[i]=m}return o},
+ lo(a,n){const o=nanArr(a.length);for(let i=n-1;i<a.length;i++){let m=Infinity;for(let j=i-n+1;j<=i;j++)if(a[j]<m)m=a[j];o[i]=m}return o},
+ vwap(x){const o=new Float64Array(x.n);let pv=0,v=0,d='';for(let i=0;i<x.n;i++){const b=x.b[i];if(b.d!==d){d=b.d;pv=0;v=0}const tp=(b.h+b.l+b.c)/3;pv+=tp*b.v;v+=b.v;o[i]=v>0?pv/v:tp}return o},
+ adx(x,n){const p=new Float64Array(x.n),m=new Float64Array(x.n);for(let i=1;i<x.n;i++){const u=x.h[i]-x.h[i-1],d=x.l[i-1]-x.l[i];p[i]=u>d&&u>0?u:0;m[i]=d>u&&d>0?d:0}const tr=I.rma(I.tr(x),n),rp=I.rma(p,n),rm=I.rma(m,n),dx=nanArr(x.n);for(let i=0;i<x.n;i++){if(!isFinite(tr[i])||tr[i]===0)continue;const a=100*rp[i]/tr[i],b=100*rm[i]/tr[i];dx[i]=a+b>0?100*Math.abs(a-b)/(a+b):0}return I.rma(dx,n)}
+};
+class Ctx{
+ constructor(b){this.b=b;this.n=b.length;for(const k of ['o','h','l','c','v'])this[k]=Float64Array.from(b,x=>x[k]);this.M=new Map()}
+ k(key,f){let v=this.M.get(key);if(v===undefined){v=f();this.M.set(key,v)}return v}
+ sma(n){return this.k('sma'+n,()=>I.sma(this.c,n))}
+ ema(n){return this.k('ema'+n,()=>I.ema(this.c,n))}
+ rsi(n){return this.k('rsi'+n,()=>I.rsi(this.c,n))}
+ atr(n){return this.k('atr'+n,()=>I.rma(I.tr(this),n))}
+ adx(n){return this.k('adx'+n,()=>I.adx(this,n))}
+ vwap(){return this.k('vwap',()=>I.vwap(this))}
+ hh(n){return this.k('hh'+n,()=>I.hi(this.h,n))}
+ ll(n){return this.k('ll'+n,()=>I.lo(this.l,n))}
+ bb(n,k){return this.k('bb'+n+'_'+k,()=>{const m=this.sma(n),s=I.sd(this.c,n),up=m.map((v,i)=>v+k*s[i]),lo=m.map((v,i)=>v-k*s[i]);return {m,up,lo}})}
+ macd(f,s,g){return this.k('macd'+f+'_'+s+'_'+g,()=>{const a=this.ema(f),b=this.ema(s),m=a.map((v,i)=>v-b[i]),sg=I.ema(m,g);return {m,s:sg,h:m.map((v,i)=>v-sg[i])}})}
+ stoch(n,d){return this.k('st'+n+'_'+d,()=>{const H=this.hh(n),L=this.ll(n),raw=this.c.map((c,i)=>H[i]>L[i]?100*(c-L[i])/(H[i]-L[i]):50);for(let i=0;i<n-1;i++)raw[i]=NaN;const k=I.sma(raw,3);return {k,d:I.sma(k,d)}})}
+}
+
+/* ---------- Formula engine ---------- */
+const fCache=new Map();
+function compile(src){if(!src||!src.trim())return null;let f=fCache.get(src);if(!f){f=new Function('E','with(E){return ('+src+')}');fCache.set(src,f)}return f}
+function env(x,P={}){
+ const E={i:0,P1:P.P1,P2:P.P2,P3:P.P3,Math};const g=(a,ago)=>a[E.i-(ago|0)];
+ Object.assign(E,{sma:(n,a)=>g(x.sma(n),a),ema:(n,a)=>g(x.ema(n),a),rsi:(n,a)=>g(x.rsi(n),a),atr:(n,a)=>g(x.atr(n),a),adx:(n,a)=>g(x.adx(n),a),vwap:a=>g(x.vwap(),a),
+  hh:(n,a)=>g(x.hh(n),a),ll:(n,a)=>g(x.ll(n),a),bbu:(n,k,a)=>g(x.bb(n,k).up,a),bbl:(n,k,a)=>g(x.bb(n,k).lo,a),macd:(f,s,a)=>g(x.macd(f,s,9).m,a),macds:(f,s,sg,a)=>g(x.macd(f,s,sg).s,a),
+  stoch:(n,a)=>g(x.stoch(n,3).k,a),C:a=>g(x.c,a),O:a=>g(x.o,a),H:a=>g(x.h,a),L:a=>g(x.l,a),V:a=>g(x.v,a)});
+ for(const k of ['c','o','h','l','v'])Object.defineProperty(E,k,{get(){return x[k][E.i]}});
+ Object.defineProperty(E,'tod',{get(){return x.b[E.i].m}});
+ return E}
+function evalSeries(x,src,P){const f=compile(src),E=env(x,P),o=nanArr(x.n);for(let i=0;i<x.n;i++){E.i=i;const v=+f(E);o[i]=isFinite(v)?v:NaN}return o}
+
+/* ---------- Strategies ---------- */
+function regime(n,f){const o=new Int8Array(n);for(let i=0;i<n;i++)o[i]=f(i);return o}
+function machine(n,step){const o=new Int8Array(n);let s=0;for(let i=0;i<n;i++){s=step(i,s);o[i]=s}return o}
+const intraOnly=x=>x.n&&x.b.length>1&&(x.b[1].t-x.b[0].t)<864e5;
+const STRATS=[
+ {id:'sma',name:'SMA crossover',p:[['fast','Fast',10,5,50,5],['slow','Slow',30,20,200,10]],ok:p=>p.fast<p.slow,
+  fn(x,p,sh){const f=x.sma(p.fast),s=x.sma(p.slow);return regime(x.n,i=>f[i]>s[i]?1:f[i]<s[i]&&sh?-1:0)}},
+ {id:'ema',name:'EMA crossover',p:[['fast','Fast',9,3,30,3],['slow','Slow',21,10,100,5]],ok:p=>p.fast<p.slow,
+  fn(x,p,sh){const f=x.ema(p.fast),s=x.ema(p.slow);return regime(x.n,i=>f[i]>s[i]?1:f[i]<s[i]&&sh?-1:0)}},
+ {id:'rsi',name:'RSI mean reversion',p:[['n','Period',14,2,30,2],['lo','Buy below',30,10,40,5],['hi','Sell above',70,50,90,5]],ok:p=>p.lo<p.hi,
+  fn(x,p,sh){const r=x.rsi(p.n);return machine(x.n,(i,s)=>{const v=r[i];if(!isFinite(v))return s;if(s===0)return v<p.lo?1:sh&&v>p.hi?-1:0;if(s===1)return v>p.hi?(sh?-1:0):1;return v<p.lo?1:-1})}},
+ {id:'bb',name:'Bollinger mean reversion',p:[['n','Period',20,10,50,5],['k','Std devs',2,1,3,0.5]],
+  fn(x,p,sh){const b=x.bb(p.n,p.k),c=x.c;return machine(x.n,(i,s)=>{if(!isFinite(b.m[i]))return s;if(s===0)return c[i]<b.lo[i]?1:sh&&c[i]>b.up[i]?-1:0;if(s===1)return c[i]>=b.m[i]?0:1;return c[i]<=b.m[i]?0:-1})}},
+ {id:'don',name:'Donchian breakout',p:[['n','Entry period',20,10,60,5],['m','Exit period',10,5,30,5]],
+  fn(x,p,sh){const H=x.hh(p.n),L=x.ll(p.n),HX=x.hh(p.m),LX=x.ll(p.m),c=x.c;return machine(x.n,(i,s)=>{if(i<1||!isFinite(H[i-1]))return s;if(s===0)return c[i]>H[i-1]?1:sh&&c[i]<L[i-1]?-1:0;if(s===1)return c[i]<LX[i-1]?0:1;return c[i]>HX[i-1]?0:-1})}},
+ {id:'macd',name:'MACD signal cross',p:[['f','Fast',12,6,20,2],['s','Slow',26,20,40,2],['g','Signal',9,5,15,2]],ok:p=>p.f<p.s,
+  fn(x,p,sh){const m=x.macd(p.f,p.s,p.g);return regime(x.n,i=>m.m[i]>m.s[i]?1:m.m[i]<m.s[i]&&sh?-1:0)}},
+ {id:'vwap',name:'VWAP trend (intraday)',p:[['band','Band %',0.1,0,0.5,0.05],['wait','Start after open (min)',15,0,60,5]],intra:1,
+  fn(x,p,sh){if(!intraOnly(x))return new Int8Array(x.n);const w=x.vwap(),c=x.c,b=p.band/100;return machine(x.n,(i,s)=>{const m=x.b[i].m;if(m<570+p.wait||m>=955)return 0;if(s===0)return c[i]>w[i]*(1+b)?1:sh&&c[i]<w[i]*(1-b)?-1:0;if(s===1)return c[i]<w[i]?0:1;return c[i]>w[i]?0:-1})}},
+ {id:'orb',name:'Opening range breakout (intraday)',p:[['or','Range minutes',15,5,60,5]],intra:1,
+  fn(x,p,sh){const o=new Int8Array(x.n);if(!intraOnly(x))return o;let d='',H=-Infinity,L=Infinity,done=0,s=0;for(let i=0;i<x.n;i++){const b=x.b[i];if(b.d!==d){d=b.d;H=-Infinity;L=Infinity;done=0;s=0}
+   if(b.m>=570&&b.m<570+p.or){H=Math.max(H,b.h);L=Math.min(L,b.l);s=0}else if(b.m>=570+p.or&&b.m<955&&isFinite(H)){const mid=(H+L)/2;if(s===0&&!done){if(b.c>H){s=1;done=1}else if(sh&&b.c<L){s=-1;done=1}}else if(s===1&&b.c<mid)s=0;else if(s===-1&&b.c>mid)s=0}else s=0;o[i]=s}return o}},
+ {id:'stoch',name:'Stochastic reversal',p:[['n','%K period',14,5,30,3],['d','%D period',3,2,6,1],['lo','Oversold',20,10,30,5],['hi','Overbought',80,70,90,5]],
+  fn(x,p,sh){const st=x.stoch(p.n,p.d),K=st.k,D=st.d;return machine(x.n,(i,s)=>{if(i<1||!isFinite(D[i-1]))return s;const up=K[i]>D[i]&&K[i-1]<=D[i-1],dn=K[i]<D[i]&&K[i-1]>=D[i-1];if(s===0)return up&&K[i]<p.lo?1:sh&&dn&&K[i]>p.hi?-1:0;if(s===1)return K[i]>p.hi?0:1;return K[i]<p.lo?0:-1})}},
+ {id:'custom',name:'Custom formula',p:[['P1','P1',20,5,50,5],['P2','P2',50,20,200,10],['P3','P3',14,2,30,2]],cust:1,
+  fn(x,p,sh){const R=custRules(),eL=compile(R.eL),xL=compile(R.xL),eS=compile(R.eS),xS=compile(R.xS),E=env(x,p),t=f=>!!(f&&f(E));
+   return machine(x.n,(i,s)=>{E.i=i;if(s===0)return t(eL)?1:sh&&t(eS)?-1:0;if(s===1)return t(xL)?0:1;return t(xS)?0:-1})}}
+];
+const strat=()=>STRATS.find(s=>s.id===$('stSel').value);
+function custRules(){return {eL:$('cxEL').value,xL:$('cxXL').value,eS:$('cxES').value,xS:$('cxXS').value}}
+function curParams(){const st=strat(),p={};for(const [k,,d] of st.p){const el=$('p_'+k);p[k]=el?+el.value:d}return p}
+function defParams(st){const p={};for(const [k,,d] of st.p)p[k]=d;return p}
+
+/* ---------- Backtester ---------- */
+function opts(){return {cap:+$('oCap').value||25000,size:Math.min(Math.max(+$('oSize').value||100,1),100)/100,comm:+$('oComm').value||0,slip:+$('oSlip').value||0,stop:(+$('oStop').value||0)/100,tp:(+$('oTP').value||0)/100,sh:$('oShort').checked,eod:$('oEOD').checked&&S.meta&&S.meta.tf!=='1Day'}}
+function backtest(x,pos,o,from=0,to=x.n){
+ const b=x.b,cs=o.slip/1e4,eq=new Float64Array(to-from),trades=[];let cash=o.cap,s=0,q=0,ep=0,ei=0,blk=null,inp=0;
+ const fill=(px,buy)=>px*(buy?1+cs:1-cs);
+ const close=(i,px,why)=>{const xp=fill(px,s<0);cash+=s*q*xp-q*o.comm;trades.push({side:s,ei,xi:i,ep,xp,q,pnl:s*q*(xp-ep)-2*q*o.comm,ret:s*(xp/ep-1),why});s=0;q=0};
+ const open=(i,px,side)=>{const p=fill(px,side>0),n=Math.floor(cash*o.size/p);if(n<1)return;q=n;cash-=side*q*p+q*o.comm;s=side;ep=p;ei=i};
+ for(let i=from;i<to;i++){
+  const bar=b[i],last=i===to-1,eodBar=o.eod&&(i+1>=x.n||b[i+1].d!==bar.d);
+  if(i>from){let tg=pos[i-1];if(blk!==null){if(tg!==blk)blk=null;else tg=0}if(eodBar&&s===0)tg=0;
+   if(tg!==s){if(s!==0)close(i,bar.o,'signal');if(tg!==0&&!last)open(i,bar.o,tg)}}
+  if(s!==0&&(o.stop>0||o.tp>0)){const side=s;
+   if(s>0){const sp=ep*(1-o.stop),tp=ep*(1+o.tp);if(o.stop>0&&bar.l<=sp){close(i,Math.min(bar.o,sp),'stop');blk=side}else if(o.tp>0&&bar.h>=tp){close(i,Math.max(bar.o,tp),'target');blk=side}}
+   else{const sp=ep*(1+o.stop),tp=ep*(1-o.tp);if(o.stop>0&&bar.h>=sp){close(i,Math.max(bar.o,sp),'stop');blk=side}else if(o.tp>0&&bar.l<=tp){close(i,Math.min(bar.o,tp),'target');blk=side}}}
+  if(s!==0&&(eodBar||last))close(i,bar.c,last?'end':'eod');
+  if(s!==0)inp++;
+  eq[i-from]=cash+s*q*bar.c}
+ const r={eq,trades,from,to,inp};r.m=stats(x,r,o);return r}
+function stats(x,r,o){
+ const eq=r.eq,n=eq.length,b=x.b;if(!n)return {};const yrs=Math.max((b[r.to-1].t-b[r.from].t)/(365.25*864e5),1/365);
+ let pk=o.cap,dd=0,prev=o.cap,sm=0,sq=0,dq=0;for(let i=0;i<n;i++){const e=eq[i];if(e>pk)pk=e;const d=1-e/pk;if(d>dd)dd=d;const rt=e/prev-1;prev=e;sm+=rt;sq+=rt*rt;if(rt<0)dq+=rt*rt}
+ const mean=sm/n,sd=Math.sqrt(Math.max(sq/n-mean*mean,0)),dsd=Math.sqrt(dq/n),bpy=n/yrs,fin=eq[n-1];
+ let gw=0,gl=0,w=0,ar=0,hb=0;for(const t of r.trades){if(t.pnl>0){gw+=t.pnl;w++}else gl-=t.pnl;ar+=t.ret;hb+=t.xi-t.ei}
+ const nt=r.trades.length,cagr=fin>0?Math.pow(fin/o.cap,1/yrs)-1:-1;
+ return {tot:fin/o.cap-1,cagr,dd,sharpe:sd>0?mean/sd*Math.sqrt(bpy):0,sortino:dsd>0?mean/dsd*Math.sqrt(bpy):0,n:nt,win:nt?w/nt:NaN,pf:gl>0?gw/gl:(gw>0?Infinity:NaN),avg:nt?ar/nt:NaN,hold:nt?hb/nt:NaN,bh:b[r.to-1].c/b[r.from].c-1,exp:r.inp/n,calmar:dd>0?cagr/dd:0,fin}}
+const OBJ={sharpe:m=>m.sharpe,tot:m=>m.tot,calmar:m=>m.calmar,pf:m=>isFinite(m.pf)?Math.min(m.pf,20):(m.pf===Infinity?20:-1)};
+
+/* ---------- Charts ---------- */
+const CH={main:null,eq:null,wf:null};
+const chartOpts=()=>({autoSize:true,layout:{background:{type:'solid',color:'#0d1117'},textColor:'#c9d1d9',panes:{separatorColor:'#30363d'}},grid:{vertLines:{color:'#1a212c'},horzLines:{color:'#1a212c'}},
+ rightPriceScale:{borderColor:'#30363d'},timeScale:{borderColor:'#30363d',timeVisible:!S.meta||S.meta.tf!=='1Day',secondsVisible:false},crosshair:{mode:0}});
+function times(){const o=new Array(S.bars.length);let p=-Infinity;for(let i=0;i<S.bars.length;i++){let t=S.bars[i].lt;if(t<=p)t=p+1;o[i]=t;p=t}return o}
+function lineData(T,arr,from=0){const o=[];for(let i=from;i<arr.length;i++)if(isFinite(arr[i]))o.push({time:T[i],value:arr[i]});return o}
+const COLORS=['#f5a623','#4f8cff','#c678dd','#56b6c2','#e5c07b','#98c379','#ff7eb6'];
+const IND={
+ SMA:{d:'20',pane:0,f:(x,a)=>[[x.sma(a[0]),'SMA '+a[0]]]},
+ EMA:{d:'20',pane:0,f:(x,a)=>[[x.ema(a[0]),'EMA '+a[0]]]},
+ Bollinger:{d:'20,2',pane:0,f:(x,a)=>{const b=x.bb(a[0],a[1]);return [[b.up,'BB up'],[b.m,'BB mid'],[b.lo,'BB low']]}},
+ VWAP:{d:'',pane:0,f:x=>[[x.vwap(),'VWAP']]},
+ Donchian:{d:'20',pane:0,f:(x,a)=>[[x.hh(a[0]),'DC up'],[x.ll(a[0]),'DC low']]},
+ RSI:{d:'14',pane:1,f:(x,a)=>[[x.rsi(a[0]),'RSI '+a[0]]],lv:[30,70]},
+ MACD:{d:'12,26,9',pane:1,f:(x,a)=>{const m=x.macd(a[0],a[1],a[2]);return [[m.m,'MACD'],[m.s,'Signal'],[m.h,'Hist','h']]}},
+ Stochastic:{d:'14,3',pane:1,f:(x,a)=>{const s=x.stoch(a[0],a[1]);return [[s.k,'%K'],[s.d,'%D']]},lv:[20,80]},
+ ADX:{d:'14',pane:1,f:(x,a)=>[[x.adx(a[0]),'ADX '+a[0]]],lv:[25]},
+ ATR:{d:'14',pane:1,f:(x,a)=>[[x.atr(a[0]),'ATR '+a[0]]]}
+};
+let inds=LS.get('inds',[{t:'EMA',a:'9'},{t:'EMA',a:'21'},{t:'VWAP',a:''},{t:'RSI',a:'14'}]);
+let custInds=LS.get('custInds',[]);
+let candle=null,volS=null;
+function renderChart(keepView){
+ const el=$('chart');let vr=null;if(CH.main){if(keepView)vr=CH.main.timeScale().getVisibleLogicalRange();CH.main.remove();CH.main=null}
+ if(!S.bars.length)return;const x=S.x,T=times();
+ const ch=CH.main=LW.createChart(el,chartOpts());
+ candle=ch.addSeries(LW.CandlestickSeries,{upColor:'#26a69a',downColor:'#ef5350',borderVisible:false,wickUpColor:'#26a69a',wickDownColor:'#ef5350'});
+ candle.setData(S.bars.map((b,i)=>({time:T[i],open:b.o,high:b.h,low:b.l,close:b.c})));
+ volS=ch.addSeries(LW.HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:'vol',lastValueVisible:false,priceLineVisible:false});
+ ch.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0}});
+ volS.setData(S.bars.map((b,i)=>({time:T[i],value:b.v,color:b.c>=b.o?'rgba(38,166,154,.35)':'rgba(239,83,80,.35)'})));
+ let pane=1,ci=0;
+ const add=(arr,title,p,type)=>{const col=COLORS[ci++%COLORS.length];const s=type==='h'?ch.addSeries(LW.HistogramSeries,{color:'rgba(79,140,255,.5)',priceLineVisible:false,lastValueVisible:false,title},p):ch.addSeries(LW.LineSeries,{color:col,lineWidth:1.5,priceLineVisible:false,lastValueVisible:true,title,crosshairMarkerVisible:false},p);s.setData(lineData(T,arr));return s};
+ for(const it of inds){const D=IND[it.t];if(!D)continue;const a=(it.a||D.d).split(',').filter(Boolean).map(Number);try{const p=D.pane?pane++:0;let first=null;for(const [arr,t,ty] of D.f(x,a)){const s=add(arr,t,p,ty);first=first||s}if(D.lv&&first)for(const v of D.lv)first.createPriceLine({price:v,color:'#555',lineWidth:1,lineStyle:2,axisLabelVisible:false})}catch(e){console.warn(e)}}
+ for(const c of custInds){try{const p=c.pane?pane++:0;add(evalSeries(x,c.expr,{}),c.name,p)}catch(e){status('Custom indicator "'+c.name+'": '+e.message,true)}}
+ try{ch.panes().forEach((p,i)=>{if(i>0)p.setHeight(110)})}catch(e){}
+ if($('showMk').checked&&S.bt&&S.bt.key===S.key){const mk=[];for(const t of S.bt.r.trades){mk.push({time:T[t.ei],position:t.side>0?'belowBar':'aboveBar',color:t.side>0?'#26a69a':'#ef5350',shape:t.side>0?'arrowUp':'arrowDown',text:t.side>0?'B':'S'});mk.push({time:T[t.xi],position:t.side>0?'aboveBar':'belowBar',color:'#c9d1d9',shape:'circle',text:t.why==='signal'?'':t.why})}
+  mk.sort((a,b)=>a.time-b.time);if(mk.length<=6000)LW.createSeriesMarkers(candle,mk)}
+ if(vr)ch.timeScale().setVisibleLogicalRange(vr);else{const n=S.bars.length;ch.timeScale().setVisibleLogicalRange({from:Math.max(0,n-300),to:n+5})}
+ updateQuote();updateSignal()}
+function renderInds(){const L=$('indList');L.innerHTML='';inds.forEach((it,i)=>{const d=document.createElement('div');d.className='ind';d.innerHTML=`<span>${it.t} <span class="mu">${it.a||IND[it.t].d}</span></span><button>×</button>`;d.querySelector('button').onclick=()=>{inds.splice(i,1);LS.set('inds',inds);renderInds();renderChart(1)};L.appendChild(d)});
+ custInds.forEach((c,i)=>{const d=document.createElement('div');d.className='ind';d.innerHTML=`<span>${c.name} <span class="mu">ƒ</span></span><button>×</button>`;d.title=c.expr;d.querySelector('button').onclick=()=>{custInds.splice(i,1);LS.set('custInds',custInds);renderInds();renderChart(1)};L.appendChild(d)})}
+function updateQuote(){const b=S.bars,n=b.length;if(!n)return;const l=b[n-1];let pc=null;for(let i=n-2;i>=0;i--)if(b[i].d!==l.d){pc=b[i].c;break}if(pc===null)pc=b[0].o;const ch=l.c/pc-1;
+ $('quote').innerHTML=`${S.meta.sym} <span>${num(l.c)}</span> <span class="${cls(ch)}" style="font-size:14px">${ch>=0?'+':''}${pct(ch,2)}</span>`;$('quote').className='sig';$('quoteSub').textContent=`Last bar ${fmtT(l)} ET · vs prior day close`}
+function updateSignal(){if(!S.x||!S.x.n)return;try{const st=strat(),o=opts(),pos=st.fn(S.x,curParams(),o.sh);const k=live.on?S.x.n-2:S.x.n-1;if(k<0)return;const v=pos[k];let j=k;while(j>0&&pos[j-1]===v)j--;
+ const lab=v>0?'LONG':v<0?'SHORT':'FLAT';$('sigBox').textContent=lab;$('sigBox').className='sig '+(v>0?'pos':v<0?'neg':'mu');$('sigSub').textContent=`${st.name} · since ${fmtT(S.bars[j])} ET${live.on?' · last closed bar':''}`}catch(e){$('sigBox').textContent='Error';$('sigSub').textContent=e.message}}
+function eqChart(key,el,series,dd){if(CH[key])CH[key].remove();el.style.display='block';const ch=CH[key]=LW.createChart(el,chartOpts());
+ for(const s of series){const l=ch.addSeries(LW.LineSeries,{color:s.c,lineWidth:2,priceLineVisible:false,title:s.n});l.setData(s.d)}
+ if(dd){const a=ch.addSeries(LW.AreaSeries,{lineColor:'#ef5350',topColor:'rgba(239,83,80,.05)',bottomColor:'rgba(239,83,80,.4)',lineWidth:1,priceLineVisible:false,title:'Drawdown %',invertFilledArea:true},1);a.setData(dd);try{ch.panes()[1].setHeight(90)}catch(e){}}
+ ch.timeScale().fitContent()}
+
+/* ---------- Data loading ---------- */
+const DB={db:null,
+ open(){return this.db?Promise.resolve(this.db):new Promise((res,rej)=>{const r=indexedDB.open('tradelab',1);r.onupgradeneeded=()=>r.result.createObjectStore('series',{keyPath:'key'});r.onsuccess=()=>{this.db=r.result;res(this.db)};r.onerror=()=>rej(r.error)})},
+ async tx(mode,fn){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('series',mode),r=fn(t.objectStore('series'));t.oncomplete=()=>res(r.result);t.onerror=()=>rej(t.error)})},
+ get(k){return this.tx('readonly',s=>s.get(k))},put(v){return this.tx('readwrite',s=>s.put(v))},del(k){return this.tx('readwrite',s=>s.delete(k))},all(){return this.tx('readonly',s=>s.getAll())}};
+const keys=()=>({id:$('kId').value.trim(),sec:$('kSec').value.trim()});
+async function api(url){const k=keys();for(let a=0;a<6;a++){let r;try{r=await fetch(url,{headers:{'APCA-API-KEY-ID':k.id,'APCA-API-SECRET-KEY':k.sec}})}catch(e){throw new Error('Network error reaching Alpaca: '+e.message)}
+ if(r.status===429){status('Rate limited — waiting…');await sleep(3000*(a+1));continue}
+ if(!r.ok){let m=r.status+' '+r.statusText;try{const j=await r.json();m+=' — '+(j.message||JSON.stringify(j))}catch(e){}if(r.status===401||r.status===403)m+=' (check API keys in Settings)';throw new Error(m)}return r.json()}throw new Error('Rate limited by Alpaca — try again in a minute')}
+async function fetchBars(sym,tf,feed,from,to){const out=[];let tok=null;do{const q=new URLSearchParams({timeframe:tf,start:new Date(from).toISOString(),end:new Date(to).toISOString(),limit:'10000',feed,adjustment:'split',sort:'asc'});if(tok)q.set('page_token',tok);
+ const j=await api(`https://data.alpaca.markets/v2/stocks/${encodeURIComponent(sym)}/bars?${q}`);for(const b of j.bars||[])out.push([Date.parse(b.t),b.o,b.h,b.l,b.c,b.v]);tok=j.next_page_token;status(`Downloading ${sym} ${tf}… ${out.length.toLocaleString()} bars`)}while(tok);return out}
+function merge(a,b){const m=new Map();for(const r of a)m.set(r[0],r);for(const r of b)m.set(r[0],r);return [...m.values()].sort((p,q)=>p[0]-q[0])}
+function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function demoBars(tf,from,to){const R=rng(42+Object.keys(TF).indexOf(tf)),G=()=>Math.sqrt(-2*Math.log(R()+1e-12))*Math.cos(2*Math.PI*R()),out=[],step=TF[tf]/6e4;let p=150,drift=0,ar=0;
+ for(let d=new Date(from-864e5*3);d.getTime()<=to+864e5;d=new Date(d.getTime()+864e5)){const wd=d.getUTCDay();if(wd===0||wd===6)continue;const ds=d.toISOString().slice(0,10),m0=etMidnight(ds);if(R()<0.15)drift=G()*0.004;
+  if(tf==='1Day'){const t=m0;if(t<from-864e5||t>to)continue;const o=p*(1+G()*0.004),c=o*Math.exp(drift+G()*0.016);out.push([t,o,Math.max(o,c)*(1+Math.abs(G())*0.006),Math.min(o,c)*(1-Math.abs(G())*0.006),c,Math.round(4e7*(0.7+R()*0.6))]);p=c;continue}
+  p*=1+G()*0.004;const nb=Math.round(390/step);for(let k=0;k<nb;k++){const m=570+k*step,t=m0+m*6e4;const sc=Math.sqrt(step/390)*0.016,u=(k/nb-0.5)*2;ar=0.6*ar+G()*sc*0.5;const r=drift/nb+G()*sc*0.8-ar*0.25;
+   const o=p,c=o*Math.exp(r),h=Math.max(o,c)*(1+Math.abs(G())*sc*0.4),l=Math.min(o,c)*(1-Math.abs(G())*sc*0.4);if(t>=from&&t<=to)out.push([t,o,h,l,c,Math.round(4e7/nb*(0.6+1.2*u*u)*(0.6+R()*0.8))]);p=c}}
+ return out}
+async function load(){
+ const sym=$('sym').value.trim().toUpperCase(),tf=$('tf').value,feed=$('feed').value;if(!sym)return status('Enter a symbol',true);
+ if(!$('dFrom').value||!$('dTo').value)return status('Pick a start and end date',true);
+ let from=etMidnight($('dFrom').value),to=etMidnight($('dTo').value)+864e5-1,now=Date.now();if(to>now)to=now;if(from>=to)return status('Start date must be before end date',true);
+ LS.set('hdr',{sym,tf,feed,from:$('dFrom').value,to:$('dTo').value,rth:$('rth').checked});stopLive();
+ let rows,key=`${sym}|${tf}|${feed}`,src='demo';
+ try{
+  if(sym==='DEMO'){rows=demoBars(tf,from,to);key='DEMO|'+tf}
+  else{const csv=await DB.get(`${sym}|${tf}|csv`);
+   if(csv&&!keys().id){rows=csv.bars;key=csv.key;src='csv'}
+   else{if(!keys().id||!keys().sec){$('tabs').querySelector('[data-t=tSet]').click();return status('Add your Alpaca API keys in Settings, or use the symbol DEMO',true)}
+    if(feed==='sip'&&to>now-16*6e4)to=now-16*6e4;
+    status('Checking local database…');let rec=await DB.get(key);const need=[];
+    if(!rec)need.push([from,to]);else{if(from<rec.cf)need.push([from,rec.cf]);if(to>rec.ct)need.push([rec.ct,to])}
+    let got=0;for(const [a,b] of need){const r=await fetchBars(sym,tf,feed,a,b);got+=r.length;rec=rec||{key,sym,tf,feed,bars:[],cf:a,ct:b};rec.bars=merge(rec.bars,r);rec.cf=Math.min(rec.cf,a);rec.ct=Math.max(rec.ct,b)}
+    if(need.length){rec.updated=Date.now();await DB.put(rec)}rows=rec.bars;src=need.length?`Alpaca (+${got.toLocaleString()} new bars)`:'local database'}}
+ }catch(e){console.error(e);return status(e.message,true)}
+ let bars=[];for(const r of rows){if(r[0]<from||r[0]>to)continue;bars.push(prep({t:r[0],o:r[1],h:r[2],l:r[3],c:r[4],v:r[5]}))}
+ if($('rth').checked&&tf!=='1Day')bars=bars.filter(b=>b.m>=570&&b.m<960);
+ if(!bars.length)return status('No bars in that range. Check symbol, dates and feed (markets closed on weekends/holidays).',true);
+ S.bars=bars;S.meta={sym,tf,feed};S.key=key+'|'+from+'|'+to+'|'+$('rth').checked;S.x=new Ctx(bars);
+ renderChart();status(`${sym} ${tf}: ${bars.length.toLocaleString()} bars, ${bars[0].d} → ${bars[bars.length-1].d} · from ${src}`);refreshDB()}
+
+/* ---------- Live ---------- */
+const live={on:false,ws:null,timer:null,raf:0};
+function stopLive(){live.on=false;if(live.ws){try{live.ws.close()}catch(e){}live.ws=null}if(live.timer){clearInterval(live.timer);live.timer=null}$('bLive').textContent='Go live';$('bLive').classList.remove('on')}
+function startLive(){if(!S.bars.length)return status('Load data first',true);const {sym,tf,feed}=S.meta;live.on=true;$('bLive').textContent='Stop live';$('bLive').classList.add('on');updateSignal();
+ if(sym==='DEMO'){const R=rng(Date.now()%1e6),G=()=>Math.sqrt(-2*Math.log(R()+1e-12))*Math.cos(2*Math.PI*R());let t=S.bars[S.bars.length-1].t+TF[tf]-1;
+  live.timer=setInterval(()=>{const l=S.bars[S.bars.length-1];t+=TF[tf]/12;onTrade(l.c*(1+G()*0.0006),Math.round(100+R()*900),t)},300);return status('Live (simulated) · DEMO')}
+ if(feed==='csv')return status('Live needs Alpaca data',true);
+ const k=keys();status('Connecting to Alpaca stream…');const ws=live.ws=new WebSocket(`wss://stream.data.alpaca.markets/v2/${feed}`);
+ ws.onmessage=e=>{let arr;try{arr=JSON.parse(e.data)}catch(_){return}for(const m of arr){
+  if(m.T==='success'&&m.msg==='connected')ws.send(JSON.stringify({action:'auth',key:k.id,secret:k.sec}));
+  else if(m.T==='success'&&m.msg==='authenticated')ws.send(JSON.stringify({action:'subscribe',trades:[sym],bars:[sym]}));
+  else if(m.T==='subscription')status(`Live · ${sym} · ${feed.toUpperCase()} trades`);
+  else if(m.T==='error'){status(`Stream error ${m.code}: ${m.msg}`+(m.code===406?' (another TradeLab tab may be connected)':''),true)}
+  else if(m.T==='t'&&m.S===sym)onTrade(m.p,m.s,Date.parse(m.t));
+  else if((m.T==='b'||m.T==='u')&&m.S===sym&&tf==='1Min')onMinBar(m)}};
+ ws.onerror=()=>status('Stream connection error',true);ws.onclose=()=>{if(live.on){status('Stream disconnected',true);stopLive()}}}
+function onTrade(p,sz,t){const b=S.bars,l=b[b.length-1],tf=S.meta.tf;let nb=false;
+ if(tf==='1Day'){const x=prep({t});if(x.d===l.d){l.h=Math.max(l.h,p);l.l=Math.min(l.l,p);l.c=p;l.v+=sz}else{b.push(prep({t:etMidnight(x.d),o:p,h:p,l:p,c:p,v:sz}));nb=true}}
+ else{const k=Math.floor(t/TF[tf])*TF[tf];if(k>l.t){b.push(prep({t:k,o:p,h:p,l:p,c:p,v:sz}));nb=true}else if(k===l.t){l.h=Math.max(l.h,p);l.l=Math.min(l.l,p);l.c=p;l.v+=sz}else return}
+ if(nb)barClosed();else drawLast()}
+function onMinBar(m){const t=Date.parse(m.t),b=S.bars,l=b[b.length-1];if(t===l.t){Object.assign(l,{o:m.o,h:m.h,l:m.l,c:m.c,v:m.v});drawLast()}else if(t>l.t){b.push(prep({t,o:m.o,h:m.h,l:m.l,c:m.c,v:m.v}));barClosed()}}
+function drawLast(){if(live.raf)return;live.raf=requestAnimationFrame(()=>{live.raf=0;const b=S.bars,l=b[b.length-1];if(!candle)return;const T=times()[b.length-1];try{candle.update({time:T,open:l.o,high:l.h,low:l.l,close:l.c});volS.update({time:T,value:l.v,color:l.c>=l.o?'rgba(38,166,154,.35)':'rgba(239,83,80,.35)'})}catch(e){}updateQuote()})}
+function barClosed(){S.x=new Ctx(S.bars);renderChart(1)}
+
+/* ---------- Backtest UI ---------- */
+function buildParams(){const st=strat(),box=$('stPars'),saved=LS.get('par_'+st.id,{});box.innerHTML='';
+ for(const [k,lab,d] of st.p){const l=document.createElement('label');l.innerHTML=`${lab}<input type="number" id="p_${k}" step="any" value="${saved[k]??d}">`;box.appendChild(l)}
+ $('custBox').style.display=st.cust?'block':'none';if(st.intra)box.insertAdjacentHTML('beforeend','<span class="note">Intraday data only</span>');
+ $('optName').textContent=$('wfName').textContent=st.name;buildRanges()}
+function saveParams(){LS.set('par_'+strat().id,curParams());if(strat().cust)LS.set('cust',custRules())}
+function needData(){if(!S.x||!S.x.n){status('Load data first (header bar)',true);return false}return true}
+function runBT(p){if(!needData())return;const st=strat();p=p||curParams();saveParams();let pos;try{pos=st.fn(S.x,p,opts().sh)}catch(e){return status('Strategy error: '+e.message,true)}
+ const o=opts(),r=backtest(S.x,pos,o);S.bt={r,key:S.key,st:st.name,p};showBT(r,o);renderChart(1);status(`Backtest done · ${st.name} · ${r.trades.length} trades`)}
+function kpis(el,m){const k=[['Total return',pct(m.tot),cls(m.tot)],['Buy & hold',pct(m.bh),cls(m.bh)],['CAGR',pct(m.cagr),cls(m.cagr)],['Max drawdown',pct(-m.dd),'neg'],['Sharpe',num(m.sharpe),cls(m.sharpe)],['Sortino',num(m.sortino),cls(m.sortino)],
+ ['Trades',m.n,''],['Win rate',pct(m.win,0),''],['Profit factor',num(m.pf),m.pf>1?'pos':m.pf<1?'neg':''],['Avg trade',pct(m.avg,2),cls(m.avg)],['Avg bars held',num(m.hold,1),''],['Time in market',pct(m.exp,0),'']];
+ el.innerHTML=k.map(([a,b,c])=>`<div class="kpi"><small>${a}</small><b class="${c}">${b}</b></div>`).join('')}
+function showBT(r,o){const m=r.m;kpis($('btKpis'),m);const T=times(),eq=[],bh=[],dd=[];const b0=S.bars[r.from].c;let pk=o.cap;
+ for(let i=0;i<r.eq.length;i++){const t=T[r.from+i],e=r.eq[i];eq.push({time:t,value:e});bh.push({time:t,value:o.cap*S.bars[r.from+i].c/b0});if(e>pk)pk=e;dd.push({time:t,value:-(1-e/pk)*100})}
+ eqChart('eq',$('btEq'),[{n:'Strategy',c:'#4f8cff',d:eq},{n:'Buy & hold',c:'#8b949e',d:bh}],dd);
+ const tr=r.trades.slice(-1000).reverse();$('trTbl').innerHTML=tr.length?`<table><tr><th>Entry</th><th>Exit</th><th>Side</th><th>Shares</th><th>Entry $</th><th>Exit $</th><th>P&L $</th><th>Return</th><th>Bars</th><th>Exit reason</th></tr>${tr.map(t=>`<tr><td>${fmtT(S.bars[t.ei])}</td><td>${fmtT(S.bars[t.xi])}</td><td>${t.side>0?'Long':'Short'}</td><td>${t.q}</td><td>${num(t.ep)}</td><td>${num(t.xp)}</td><td class="${cls(t.pnl)}">${num(t.pnl)}</td><td class="${cls(t.ret)}">${pct(t.ret,2)}</td><td>${t.xi-t.ei}</td><td>${t.why}</td></tr>`).join('')}</table>${r.trades.length>1000?'<div class="note" style="padding:6px">Showing last 1,000 trades — export CSV for all.</div>':''}`:'<span class="note" style="padding:8px;display:block">No trades with these settings.</span>'}
+async function compareAll(){if(!needData())return;const o=opts(),rows=[];$('cmpBox').style.display='block';
+ for(const st of STRATS){if(st.cust&&!custRules().eL.trim())continue;status('Testing '+st.name+'…');await sleep(0);let p=st.id===strat().id?curParams():{...defParams(st),...LS.get('par_'+st.id,{})};
+  try{const r=backtest(S.x,st.fn(S.x,p,o.sh),o);rows.push({st,p,m:r.m})}catch(e){console.warn(st.id,e)}}
+ rows.sort((a,b)=>b.m.sharpe-a.m.sharpe);
+ $('cmpTbl').innerHTML=`<table><tr><th>Strategy</th><th>Params</th><th>Return</th><th>CAGR</th><th>Max DD</th><th>Sharpe</th><th>Trades</th><th>Win</th><th>PF</th><th>Buy & hold</th></tr>${rows.map((r,i)=>`<tr class="click" data-i="${i}"><td>${r.st.name}</td><td class="mu">${Object.values(r.p).join(', ')}</td><td class="${cls(r.m.tot)}">${pct(r.m.tot)}</td><td class="${cls(r.m.cagr)}">${pct(r.m.cagr)}</td><td class="neg">${pct(-r.m.dd)}</td><td class="${cls(r.m.sharpe)}">${num(r.m.sharpe)}</td><td>${r.m.n}</td><td>${pct(r.m.win,0)}</td><td>${num(r.m.pf)}</td><td>${pct(r.m.bh)}</td></tr>`).join('')}</table>`;
+ $('cmpTbl').querySelectorAll('tr.click').forEach(tr=>tr.onclick=()=>{const r=rows[+tr.dataset.i];applyParams(r.st.id,r.p)});status(`Compared ${rows.length} strategies · ranked by Sharpe · click a row to open it`)}
+function applyParams(id,p){$('stSel').value=id;LS.set('par_'+id,p);buildParams();$('tabs').querySelector('[data-t=tBT]').click();runBT()}
+
+/* ---------- Optimizer ---------- */
+function buildRanges(){const st=strat(),sv=LS.get('rng_'+st.id,{});
+ $('rngTbl').innerHTML=`<table><tr><th>Vary</th><th>Parameter</th><th>Min</th><th>Max</th><th>Step</th><th>Fixed value</th></tr>${st.p.map(([k,lab,d,mn,mx,sp])=>{const s=sv[k]||{on:true,mn,mx,sp};return `<tr><td><input type="checkbox" id="r_on_${k}" ${s.on?'checked':''}></td><td>${lab}</td><td><input type="number" step="any" id="r_mn_${k}" value="${s.mn}"></td><td><input type="number" step="any" id="r_mx_${k}" value="${s.mx}"></td><td><input type="number" step="any" id="r_sp_${k}" value="${s.sp}"></td><td class="mu">${d}</td></tr>`}).join('')}</table>`;
+ $('rngTbl').querySelectorAll('input').forEach(i=>i.oninput=countCombos);countCombos()}
+function ranges(){const st=strat(),cur=curParams(),sv={};const R=st.p.map(([k])=>{const on=$('r_on_'+k).checked,mn=+$('r_mn_'+k).value,mx=+$('r_mx_'+k).value,sp=+$('r_sp_'+k).value;sv[k]={on,mn,mx,sp};
+ const vals=[];if(!on||!(sp>0)||mx<mn)vals.push(cur[k]);else for(let v=mn;v<=mx+sp*1e-6;v+=sp)vals.push(+v.toFixed(6));return {k,vals}});LS.set('rng_'+st.id,sv);return R}
+function countCombos(){const n=ranges().reduce((a,r)=>a*r.vals.length,1);$('optCount').textContent=n.toLocaleString()+' combinations'+(n>50000?' — too many, max 50,000':'');return n}
+function combos(){const st=strat();let c=[{}];for(const r of ranges()){const nx=[];for(const p of c)for(const v of r.vals)nx.push({...p,[r.k]:v});c=nx}return c.filter(p=>!st.ok||st.ok(p))}
+async function optimize(from,to,obj,minT,onProg){const st=strat(),o=opts(),C=combos(),res=[];let t0=performance.now();
+ for(let j=0;j<C.length;j++){if(S.stop)break;const p=C[j];try{const r=backtest(S.x,st.fn(S.x,p,o.sh),o,from,to);if(r.m.n>=minT)res.push({p,m:r.m,s:OBJ[obj](r.m)})}catch(e){if(j===0)throw e}
+  if(performance.now()-t0>50){onProg&&onProg((j+1)/C.length);await sleep(0);t0=performance.now()}}
+ res.sort((a,b)=>b.s-a.s);return res}
+async function runOpt(){if(!needData())return;const n=countCombos();if(n>50000)return status('Too many combinations — widen the steps',true);saveParams();S.stop=false;const obj=$('optObj').value,t=performance.now();status(`Optimizing ${n.toLocaleString()} combinations…`);
+ let res;try{res=await optimize(0,S.x.n,obj,+$('optMin').value||0,f=>{$('optBar').style.width=(f*100).toFixed(1)+'%'})}catch(e){return status('Optimizer error: '+e.message,true)}$('optBar').style.width='100%';S.opt=res;
+ const st=strat(),keysP=st.p.map(p=>p[0]),top=res.slice(0,100);
+ $('optTbl').innerHTML=top.length?`<table><tr><th>#</th>${st.p.map(p=>`<th>${p[1]}</th>`).join('')}<th>Score</th><th>Return</th><th>Max DD</th><th>Sharpe</th><th>Trades</th><th>Win</th><th>PF</th></tr>${top.map((r,i)=>`<tr class="click" data-i="${i}"><td>${i+1}</td>${keysP.map(k=>`<td>${r.p[k]}</td>`).join('')}<td>${num(r.s,3)}</td><td class="${cls(r.m.tot)}">${pct(r.m.tot)}</td><td class="neg">${pct(-r.m.dd)}</td><td>${num(r.m.sharpe)}</td><td>${r.m.n}</td><td>${pct(r.m.win,0)}</td><td>${num(r.m.pf)}</td></tr>`).join('')}</table>`:'<span class="note" style="padding:8px;display:block">No combination met the minimum trade count.</span>';
+ $('optTbl').querySelectorAll('tr.click').forEach(tr=>tr.onclick=()=>applyParams(st.id,top[+tr.dataset.i].p));
+ status(`Optimizer ${S.stop?'stopped':'done'} · ${res.length.toLocaleString()} valid results in ${((performance.now()-t)/1000).toFixed(1)}s · in-sample only, so confirm with Walk-forward`)}
+
+/* ---------- Walk-forward ---------- */
+async function runWF(){if(!needData())return;const n=S.x.n,K=Math.max(2,+$('wfK').value|0),r=Math.min(Math.max(+$('wfIS').value,30),90)/100,anch=$('wfMode').value==='anch',obj=$('wfObj').value,minT=+$('wfMin').value||0;
+ const nc=countCombos();if(nc>50000)return status('Too many combinations — widen the Optimizer steps',true);saveParams();
+ const L=Math.floor(n/(K+r/(1-r))),IS=n-K*L;if(L<20||IS<50)return status('Not enough bars for that many folds — load more data or reduce folds',true);
+ S.stop=false;const st=strat(),o=opts(),folds=[];status('Running walk-forward…');
+ for(let f=0;f<K;f++){const oF=IS+f*L,oT=f===K-1?n:oF+L,iF=anch?0:oF-IS,iT=oF;
+  const res=await optimize(iF,iT,obj,minT,q=>{$('wfBar').style.width=((f+q)/K*100).toFixed(1)+'%'});if(S.stop)break;
+  if(!res.length){folds.push({f,iF,iT,oF,oT,none:1});continue}const best=res[0];const rr=backtest(S.x,st.fn(S.x,best.p,o.sh),o,oF,oT);folds.push({f,iF,iT,oF,oT,p:best.p,is:best.m,isS:best.s,oos:rr.m,eq:rr.eq})}
+ $('wfBar').style.width='100%';
+ let cap=o.cap,eqD=[],T=times(),ok=0,cnt=0,isA=0,ooA=0;for(const F of folds){if(F.none){continue}cnt++;if(F.oos.tot>0)ok++;isA+=F.is.cagr;ooA+=F.oos.cagr;const s=cap/o.cap;for(let i=0;i<F.eq.length;i++)eqD.push({time:T[F.oF+i],value:F.eq[i]*s});cap=F.eq[F.eq.length-1]*s}
+ const tot=cap/o.cap-1,bh=S.bars[n-1].c/S.bars[IS].c-1,wfe=isA!==0?(ooA/cnt)/(isA/cnt):NaN;
+ $('wfKpis').innerHTML=[['OOS total return',pct(tot),cls(tot)],['Buy & hold (OOS span)',pct(bh),cls(bh)],['Profitable folds',`${ok}/${cnt}`,ok/cnt>=0.5?'pos':'neg'],['WF efficiency',isFinite(wfe)?pct(wfe,0):'—',wfe>=0.5?'pos':'neg']].map(([a,b,c])=>`<div class="kpi"><small>${a}</small><b class="${c}">${b}</b></div>`).join('')+'<div class="note" style="grid-column:1/-1">WF efficiency = average out-of-sample CAGR ÷ average in-sample CAGR. Above about 50% suggests the edge is not just curve-fitting.</div>';
+ if(eqD.length){const b0=S.bars[folds[0].oF].c;eqChart('wf',$('wfEq'),[{n:'Out-of-sample equity',c:'#4f8cff',d:eqD},{n:'Buy & hold',c:'#8b949e',d:eqD.map((d,i)=>({time:d.time,value:o.cap*S.bars[folds[0].oF+i].c/b0}))}])}
+ const kp=st.p.map(p=>p[0]);
+ $('wfTbl').innerHTML=`<table><tr><th>Fold</th><th>In-sample</th><th>Out-of-sample</th><th>Best params</th><th>IS score</th><th>IS return</th><th>OOS return</th><th>OOS Sharpe</th><th>OOS max DD</th><th>OOS trades</th></tr>${folds.map(F=>F.none?`<tr><td>${F.f+1}</td><td>${S.bars[F.iF].d} → ${S.bars[F.iT-1].d}</td><td>${S.bars[F.oF].d} → ${S.bars[F.oT-1].d}</td><td colspan="7" class="mu">No settings met the minimum trades in-sample</td></tr>`:`<tr><td>${F.f+1}</td><td>${S.bars[F.iF].d} → ${S.bars[F.iT-1].d}</td><td>${S.bars[F.oF].d} → ${S.bars[F.oT-1].d}</td><td class="mu">${kp.map(k=>F.p[k]).join(', ')}</td><td>${num(F.isS,2)}</td><td class="${cls(F.is.tot)}">${pct(F.is.tot)}</td><td class="${cls(F.oos.tot)}">${pct(F.oos.tot)}</td><td>${num(F.oos.sharpe)}</td><td class="neg">${pct(-F.oos.dd)}</td><td>${F.oos.n}</td></tr>`).join('')}</table>`;
+ status(`Walk-forward ${S.stop?'stopped':'done'} · ${cnt} folds · OOS return ${pct(tot)}`)}
+
+/* ---------- Data tab ---------- */
+async function refreshDB(){let all=[];try{all=await DB.all()}catch(e){$('dbTbl').innerHTML='<span class="note">IndexedDB unavailable in this browser: '+e.message+'</span>';return}
+ $('dbTbl').innerHTML=all.length?`<table><tr><th>Symbol</th><th>Timeframe</th><th>Feed</th><th>Bars</th><th>First</th><th>Last</th><th>Updated</th><th></th></tr>${all.map((r,i)=>`<tr><td>${r.sym}</td><td>${r.tf}</td><td>${r.feed}</td><td>${r.bars.length.toLocaleString()}</td><td>${r.bars.length?prep({t:r.bars[0][0]}).d:''}</td><td>${r.bars.length?prep({t:r.bars[r.bars.length-1][0]}).d:''}</td><td>${r.updated?new Date(r.updated).toLocaleString():''}</td><td><button data-a="load" data-i="${i}">Use</button> <button data-a="csv" data-i="${i}">CSV</button> <button data-a="del" data-i="${i}">Delete</button></td></tr>`).join('')}</table>`:'<span class="note" style="padding:8px;display:block">Empty. Load a symbol to start caching bars.</span>';
+ $('dbTbl').querySelectorAll('button').forEach(b=>b.onclick=async()=>{const r=all[+b.dataset.i];
+  if(b.dataset.a==='del'){await DB.del(r.key);refreshDB()}
+  else if(b.dataset.a==='csv')download(`${r.sym}_${r.tf}_${r.feed}.csv`,'time,open,high,low,close,volume\n'+r.bars.map(x=>[new Date(x[0]).toISOString(),...x.slice(1)].join(',')).join('\n'));
+  else{$('sym').value=r.sym;$('tf').value=r.tf;if(r.feed!=='csv')$('feed').value=r.feed;$('dFrom').value=prep({t:r.bars[0][0]}).d;$('dTo').value=prep({t:r.bars[r.bars.length-1][0]}).d;$('tabs').querySelector('[data-t=tChart]').click();load()}})}
+async function importCsv(){const f=$('csvFile').files[0],sym=$('csvSym').value.trim().toUpperCase(),tf=$('csvTf').value;if(!f||!sym)return status('Choose a file and enter a symbol',true);
+ const rows=[];for(const line of (await f.text()).split(/\r?\n/)){const c=line.split(/[,;\t]/);if(c.length<6)continue;let t=/^\d{10,13}$/.test(c[0].trim())?+c[0]:Date.parse(c[0]);if(t<1e11)t*=1000;const v=c.slice(1,6).map(Number);if(!isFinite(t)||v.some(z=>!isFinite(z)))continue;rows.push([t,...v])}
+ if(!rows.length)return status('No valid rows found',true);rows.sort((a,b)=>a[0]-b[0]);const key=`${sym}|${tf}|csv`;await DB.put({key,sym,tf,feed:'csv',bars:rows,cf:rows[0][0],ct:rows[rows.length-1][0],updated:Date.now()});
+ status(`Imported ${rows.length.toLocaleString()} bars as ${sym} ${tf}. Clear the API Key ID or click Use in the table to load it.`);refreshDB()}
+
+/* ---------- Init ---------- */
+function init(){
+ if(!LW){status('Chart library failed to load — check your internet connection and reload',true);return}
+ $('tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('act',x===b));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('act',t.id===b.dataset.t));if(b.dataset.t==='tData')refreshDB();if(b.dataset.t==='tChart'&&CH.main)setTimeout(()=>renderChart(1),0)};
+ const k=LS.get('keys',null);if(k){$('kId').value=k.id;$('kSec').value=k.sec;$('kRem').checked=true}
+ const h=LS.get('hdr',null),today=new Date(),ds=d=>new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+ $('sym').value=h?h.sym:(k?'AAPL':'DEMO');$('tf').value=h?h.tf:'5Min';$('feed').value=h&&h.feed!=='csv'?h.feed:'iex';$('dFrom').value=h?h.from:ds(new Date(today-60*864e5));$('dTo').value=h?h.to:ds(today);if(h)$('rth').checked=h.rth;
+ const saveKeys=()=>{if($('kRem').checked)LS.set('keys',keys());else LS.del('keys')};['kId','kSec','kRem'].forEach(i=>$(i).onchange=saveKeys);
+ $('bKeyClr').onclick=()=>{$('kId').value=$('kSec').value='';$('kRem').checked=false;LS.del('keys');status('Keys removed from this browser')};
+ $('bKeyTest').onclick=async()=>{status('Testing…');try{const j=await api('https://data.alpaca.markets/v2/stocks/SPY/bars/latest?feed=iex');status('Connected ✓ SPY latest bar '+num(j.bar.c)+' at '+new Date(j.bar.t).toLocaleString())}catch(e){status(e.message,true)}};
+ for(const n in IND){const o=document.createElement('option');o.textContent=n;$('indSel').appendChild(o)}$('indSel').onchange=()=>$('indPar').value=IND[$('indSel').value].d;$('indSel').onchange();
+ $('indAdd').onclick=()=>{inds.push({t:$('indSel').value,a:$('indPar').value.trim()});LS.set('inds',inds);renderInds();renderChart(1)};
+ $('ciAdd').onclick=()=>{const name=$('ciName').value.trim()||'Custom',expr=$('ciExpr').value.trim();if(!expr)return;if(S.x)try{evalSeries(S.x,expr,{})}catch(e){return status('Formula error: '+e.message,true)}custInds.push({name,expr,pane:+$('ciPane').value});LS.set('custInds',custInds);renderInds();renderChart(1)};
+ renderInds();$('showMk').onchange=()=>renderChart(1);
+ for(const s of STRATS){const o=document.createElement('option');o.value=s.id;o.textContent=s.name;$('stSel').appendChild(o)}$('stSel').value=LS.get('strat','ema');
+ const cr=LS.get('cust',{eL:'ema(P1) > ema(P2) && rsi(P3) < 70',xL:'c < ema(P1)',eS:'',xS:''});$('cxEL').value=cr.eL;$('cxXL').value=cr.xL;$('cxES').value=cr.eS;$('cxXS').value=cr.xS;
+ $('stSel').onchange=()=>{LS.set('strat',$('stSel').value);buildParams();updateSignal()};buildParams();
+ const ex=LS.get('exec',null);const eIds=['oCap','oSize','oComm','oSlip','oStop','oTP'];if(ex){eIds.forEach(i=>{if(ex[i]!=null)$(i).value=ex[i]});$('oShort').checked=!!ex.oShort;$('oEOD').checked=ex.oEOD!==false}
+ [...eIds,'oShort','oEOD'].forEach(i=>$(i).addEventListener('change',()=>{const e={};eIds.forEach(j=>e[j]=$(j).value);e.oShort=$('oShort').checked;e.oEOD=$('oEOD').checked;LS.set('exec',e);updateSignal()}));
+ $('stPars').addEventListener('change',()=>{saveParams();updateSignal()});
+ $('bRun').onclick=()=>runBT();$('bAll').onclick=compareAll;$('bOpt').onclick=runOpt;$('bOptStop').onclick=()=>S.stop=true;$('bWF').onclick=runWF;
+ $('bTradesCsv').onclick=()=>{if(!S.bt)return status('Run a backtest first',true);download(`trades_${S.meta.sym}.csv`,'entry_time,exit_time,side,shares,entry_px,exit_px,pnl,return,bars,reason\n'+S.bt.r.trades.map(t=>[fmtT(S.bars[t.ei]),fmtT(S.bars[t.xi]),t.side>0?'long':'short',t.q,t.ep.toFixed(4),t.xp.toFixed(4),t.pnl.toFixed(2),t.ret.toFixed(5),t.xi-t.ei,t.why].join(',')).join('\n'))};
+ $('bBarsCsv').onclick=()=>{if(!S.bars.length)return status('Load data first',true);download(`${S.meta.sym}_${S.meta.tf}.csv`,'time_et,open,high,low,close,volume\n'+S.bars.map(b=>[fmtT(b),b.o,b.h,b.l,b.c,b.v].join(',')).join('\n'))};
+ $('bDbRef').onclick=refreshDB;$('bCsv').onclick=importCsv;
+ $('bLoad').onclick=load;$('sym').onkeydown=e=>{if(e.key==='Enter')load()};$('bLive').onclick=()=>live.on?(stopLive(),status('Live stopped')):startLive();
+ window.addEventListener('beforeunload',stopLive);
+ load()}
+init();
+</script>
+</body>
+</html>
