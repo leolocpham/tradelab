@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from engine import ET, STRATS, Bars, backtest, signals  # noqa: E402
+NAN_ = float("nan")
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
@@ -268,9 +269,100 @@ class Bot:
                             "settings": {k: cfg[k] for k in ("min_abs_gap_pct", "min_rvol", "min_price", "min_avg_dollar_volume", "lookback_days", "allow_shorts", "stop_pct")}}
         self.D["picks"] = [{"sym": r["sym"], "strategy": r["best"]["id"], "strategy_name": r["best"]["name"], "params": STRATS[r["best"]["id"]][2],
                             "gap": r["gap"], "rvol": r["rvol"], "bt": r["best"]} for r in picks]
+        try:
+            self.add_plans(hist)
+        except Exception as e:
+            self.log(f"trade plans failed: {e}")
         self.D["status"] = "screened"
         self.event("screen", passed=len(ok), tested=len(cands), picks=[p["sym"] for p in self.D["picks"]])
         self.save(f"bot: screen {self.day}", force=True)
+
+
+    # ---------- beginner trade plans
+    def add_plans(self, hist):
+        """Attach price levels to each pick: entry trigger, stop, target, share count."""
+        picks = self.D.get("picks") or []
+        if not picks: return
+        now = self.clock.now(); nowms = now.timestamp() * 1000
+        today = self.api.bars([p["sym"] for p in picks], self.tf, self.open_t, min(now, self.close_t), "iex")
+        acct = {}
+        try: acct = self.api.account()
+        except Exception: pass
+        base = float(acct.get("last_equity") or acct.get("equity") or 0)
+        alloc = base * self.cfg["capital_fraction"] / len(picks) if base else 0
+        for p in picks:
+            tb = [b for b in today.get(p["sym"], []) if b[0] + self.tfms <= nowms]
+            p["plan"] = self.plan_for(p, hist.get(p["sym"], []), tb, alloc)
+
+    def plan_for(self, p, hist_rows, today_rows, alloc):
+        cfg = self.cfg; sid = p["strategy"]; prm = {**STRATS[sid][2], **(p.get("params") or {})}
+        rows = hist_rows + today_rows
+        if not rows: return None
+        x = Bars(rows); n = x.n - 1; D = x.days(); k = D["di"][n]
+        is_today = bool(today_rows)
+        price = x.c[n]
+        prev_close = D["c"][k - 1] if (is_today and k >= 1) else D["c"][k]
+        day_open = D["o"][k] if is_today else None
+        sig = signals(x, sid, None if sid == "custom" else p.get("params"), cfg["allow_shorts"])[n] if is_today else 0
+        side = -1 if sig < 0 else 1
+        orh = orl = None
+        if is_today:
+            orb = [i for i in range(x.n) if D["di"][i] == k and 570 <= x.m[i] < 585]
+            if orb: orh = max(x.h[i] for i in orb); orl = min(x.l[i] for i in orb)
+        vw = x.vwap()[n] if is_today else None
+        atr_d = x.datr(14)[k] if is_today else NAN_
+        trig = None; trig_txt = None; tgt = None; tgt_txt = None; stp = None; stp_txt = None
+        st = cfg["stop_pct"] / 100
+        if sid == "orb5" and is_today:
+            first = next((i for i in range(x.n) if D["di"][i] == k and x.m[i] >= 570), None)
+            if first is not None and math.isfinite(atr_d):
+                d = 1 if x.c[first] > x.o[first] else -1; side = d
+                trig = x.c[first]; trig_txt = "first 5-minute candle closed " + ("up" if d > 0 else "down") + ": enter at about this price"
+                stp = trig - d * prm["atrk"] * atr_d; stp_txt = f"{prm['atrk']:.0%} of the stock's average daily range"
+        elif sid == "orb" and orh is not None:
+            trig = orh; trig_txt = "buy only if price breaks above the first 15-minute high"
+            stp = (orh + orl) / 2; stp_txt = "exit if price falls back below the middle of the opening range"
+        elif sid == "gapgo" and orh is not None and vw is not None:
+            trig = max(orh, vw); trig_txt = "buy if price breaks above the first 15-minute high while above VWAP"
+            stp = vw; stp_txt = "exit if price drops below VWAP"
+        elif sid == "gapfade" and is_today:
+            tgt = prev_close; tgt_txt = "the gap 'fills' back to yesterday's close"
+        elif sid == "lwvb" and is_today and k >= 1:
+            trig = day_open + prm["k"] * (D["h"][k - 1] - D["l"][k - 1]); trig_txt = f"today's open + {prm['k']} × yesterday's range"
+        elif sid == "dthrust" and is_today and k >= int(prm["n"]):
+            nn = int(prm["n"]); R = max(max(D["h"][k-nn:k]) - min(D["c"][k-nn:k]), max(D["c"][k-nn:k]) - min(D["l"][k-nn:k]))
+            trig = day_open + prm["k1"] * R; trig_txt = "Dual Thrust buy line (open + K1 × recent range)"
+            stp = day_open - prm["k2"] * R; stp_txt = "Dual Thrust sell line"
+        elif sid == "vwap" and vw is not None:
+            trig = vw * (1 + prm["band"] / 100); trig_txt = "buy while price holds above VWAP (after 9:45)"
+            stp = vw; stp_txt = "exit if price drops below VWAP"
+        elif sid == "vwaprev" and vw is not None:
+            tgt = vw; tgt_txt = "take profit when price returns to VWAP"
+        elif sid == "don":
+            trig = x.hh(int(prm["n"]))[n]; trig_txt = f"buy on a close above the {int(prm['n'])}-bar high"
+            stp = x.ll(int(prm["m"]))[n]; stp_txt = f"exit on a close below the {int(prm['m'])}-bar low"
+        elif sid == "keltner":
+            e = x.ema(int(prm["n"]))[n]; a = x.atr(int(prm["a"]))[n]
+            trig = e + prm["m"] * a; trig_txt = "buy on a close above the upper Keltner band"; stp = e; stp_txt = "exit on a close below the middle line (EMA)"
+        elif sid == "bb":
+            m_, up_, lo_ = x.bb(int(prm["n"]), prm["k"])
+            trig = lo_[n]; trig_txt = "buy zone: a close below the lower Bollinger band"; tgt = m_[n]; tgt_txt = "exit at the middle band"
+        entry = trig if (trig is not None and math.isfinite(trig)) else price
+        if stp is None or not math.isfinite(stp) or (side > 0 and stp >= entry) or (side < 0 and stp <= entry):
+            stp = entry * (1 - side * st); stp_txt = f"the bot's {cfg['stop_pct']}% safety stop"
+        risk = abs(entry - stp)
+        if tgt is None or not math.isfinite(tgt) or (side > 0 and tgt <= entry) or (side < 0 and tgt >= entry):
+            tgt = entry + side * 2 * risk; tgt_txt = "rule of thumb: aim for 2× what you risk (the bot itself exits on the strategy's signal)"
+        no_trade = None
+        if side < 0 and not cfg["allow_shorts"]:
+            no_trade = "The setup points DOWN today, but the bot is set to long-only (no short selling), so it skips this trade."
+        shares = math.floor(alloc / entry) if alloc and entry > 0 else 0
+        r2 = lambda v: round(float(v), 2) if v is not None and math.isfinite(v) else None
+        return {"side": "long" if side > 0 else "short", "signal": int(sig), "asof": self.clock.now().strftime("%H:%M"),
+                "price": r2(price), "prev_close": r2(prev_close), "open": r2(day_open), "or_high": r2(orh), "or_low": r2(orl),
+                "vwap": r2(vw), "atr_d": r2(atr_d), "entry": r2(entry), "entry_note": trig_txt, "stop": r2(stp), "stop_note": stp_txt,
+                "target": r2(tgt), "target_note": tgt_txt, "risk_per_share": r2(risk), "reward_risk": round(abs(tgt - entry) / risk, 1) if risk else None,
+                "shares": shares, "position_value": r2(shares * entry), "max_loss": r2(shares * risk), "no_trade": no_trade}
 
     def bt_opts(self):
         c = self.cfg
@@ -330,6 +422,7 @@ class Bot:
             if s in pending or not tb: continue
             x = Bars(hist.get(s, []) + tb)
             tg = signals(x, p["strategy"], p["params"], self.cfg["allow_shorts"])[-1]
+            p["live"] = {"signal": int(tg), "price": round(float(tb[-1][4]), 2), "time": now.strftime("%H:%M")}
             if s in blocked:
                 if tg != blocked[s]: del blocked[s]
                 else: tg = 0

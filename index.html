@@ -48,6 +48,16 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--pn2)}
 code{background:var(--pn2);padding:1px 4px;border-radius:4px;font-size:12px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .note{color:var(--mu);font-size:12px}
+.pick{border:1px solid var(--ln);border-radius:8px;padding:8px 10px;margin:6px 0;background:var(--bg)}
+.pick summary{cursor:pointer;line-height:1.6}
+.tag{display:inline-block;background:var(--pn2);border:1px solid var(--ln);border-radius:12px;padding:0 8px;font-size:12px;margin-left:4px}
+.plan{margin-top:8px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin:6px 0}
+.pgrid div{background:var(--pn);border:1px solid var(--ln);border-radius:8px;padding:8px}
+.pgrid small{display:block;color:var(--mu)}.pgrid b{display:block;font-size:18px}.pgrid span{display:block;color:var(--mu);font-size:11px;margin-top:2px}
+.steps{margin:8px 0 0 18px;padding:0}.steps li{margin:4px 0}
+.guide{margin:0 0 0 18px;padding:0}.guide li{margin:4px 0}
+.warn{background:rgba(210,153,34,.12);border:1px solid var(--wa);border-radius:8px;padding:8px;margin-bottom:6px}
 @media(max-width:900px){.chartwrap,.grid2{grid-template-columns:1fr}#chart{height:60vh}#status{max-width:100%;margin-left:0}}
 </style>
 </head>
@@ -589,6 +599,59 @@ async function importCsv(){const f=$('csvFile').files[0],sym=$('csvSym').value.t
 
 
 /* ---------- Bot tab ---------- */
+const SHELP={
+ sma:['Follows the trend using two moving averages (average prices). When the short average is above the long one, the stock is trending up.','Buy when the 10-bar average crosses above the 30-bar average.','Sell when it crosses back below.'],
+ ema:['Like the SMA crossover but reacts faster to new prices.','Buy when the 9-bar EMA crosses above the 21-bar EMA.','Sell when it crosses back below.'],
+ macd:['Measures momentum: whether the trend is speeding up or slowing down.','Buy when the MACD line crosses above its signal line.','Sell when it crosses back below.'],
+ supertrend:['A trailing line that sits below price in an uptrend and flips above it in a downtrend.','Buy when the Supertrend flips to "up" (green).','Sell when it flips to "down". The line itself works as a moving stop-loss.'],
+ psar:['Dots that follow price and speed up as the trend continues (Parabolic SAR).','Buy when the dots flip below the price.','Sell when price touches the dots and they flip above.'],
+ hma:['A fast, smooth moving average (Hull) that cuts down lag.','Buy when the fast Hull MA crosses above the slow one.','Sell when it crosses back below.'],
+ heikin:['Uses smoothed "Heikin-Ashi" candles that make trends easier to see.','Buy after 2 green smoothed candles in a row.','Sell on the first red smoothed candle.'],
+ adx:['ADX measures how strong a trend is; +DI and −DI show its direction.','Buy when +DI is above −DI and ADX is above 25 (a strong trend).','Sell when +DI drops below −DI.'],
+ ichimoku:['A Japanese system that shows trend, support and resistance (the "cloud").','Buy when the fast line (Tenkan) is above the slow line (Kijun) and price is above the cloud.','Sell when the fast line drops below the slow one or price falls into or below the cloud.'],
+ rsi:['RSI measures whether a stock has dropped "too far, too fast" (oversold).','Buy when RSI(14) drops below 30.','Sell when RSI rises above 70.'],
+ bb:['Bollinger Bands mark unusually high or low prices compared to recent ones.','Buy when price closes below the lower band (stretched down).','Sell when price returns to the middle band.'],
+ stoch:['The Stochastic shows where price sits in its recent range.','Buy when %K crosses above %D while below 20 (oversold).','Sell when %K rises above 80.'],
+ connors:['Buys short, sharp dips in a stock that is otherwise in an uptrend (Larry Connors).','Buy when price is above its 200-bar average and the 2-bar RSI drops below 10.','Sell when price closes above its 5-bar average.'],
+ ibs:['Internal Bar Strength: a close near the bottom of the bar often bounces.','Buy when a bar closes in its lowest 20%.','Sell when a bar closes in its top 20% or above the previous bar\'s high.'],
+ willr:['Williams %R shows oversold or overbought conditions, like RSI.','Buy when %R climbs back above −80 (leaving oversold).','Sell when %R goes above −20.'],
+ vwaprev:['VWAP is the day\'s average price weighted by volume. Prices far below it tend to snap back.','Buy when price is unusually far below VWAP (2 standard deviations).','Sell when price gets back to VWAP.'],
+ gapfade:['Bets that a stock which opened far from yesterday\'s close will move back toward it ("gap fill").','Buy a gap-down (or short a gap-up) after the first 5 minutes.','Exit when price reaches yesterday\'s close, or at the end of the day.'],
+ don:['Turtle-style breakout: buy when price makes a new high for the period.','Buy on a close above the highest high of the last 20 bars.','Sell on a close below the lowest low of the last 10 bars.'],
+ keltner:['Bands set by average volatility (ATR) around an EMA. Breaking above the top band signals strength.','Buy on a close above the upper band.','Sell on a close below the middle line.'],
+ squeeze:['Finds quiet periods (a "squeeze") that often come right before a big move.','Buy when the squeeze ends and momentum points up.','Sell when momentum turns down.'],
+ cci:['CCI measures how far price is from its average; above +100 means strong upward momentum.','Buy when CCI crosses above +100.','Sell when CCI drops below 0.'],
+ dthrust:['Day-trading breakout that uses the last few days\' range to set today\'s buy and sell lines.','Buy when price goes above the buy line.','Sell when price drops below the sell line, or at the end of the day.'],
+ lwvb:['Larry Williams\' breakout: a big move away from the open often keeps going.','Buy when price rises above today\'s open plus half of yesterday\'s range.','Hold until the end of the day.'],
+ vwap:['Stays long while buyers control the day (price above VWAP).','Buy when price is above VWAP after 9:45.','Sell when price drops below VWAP.'],
+ orb:['Opening range breakout: the first 15 minutes set a range, and a break above it often continues.','Buy when price breaks above the first 15-minute high (one trade a day).','Sell if price falls back below the middle of that range, or at the end of the day.'],
+ orb5:['From published research on "stocks in play": the first 5-minute candle often shows the day\'s direction.','If the first 5-minute candle closes up, buy right after it.','Stop-loss at 10% of the stock\'s normal daily range; otherwise hold to the end of the day.'],
+ noise:['From published research: price only trades when it moves outside its normal "noise" range for this time of day.','Buy when price breaks above the upper noise band (checked every half hour).','Sell when price drops back below the band or VWAP.'],
+ imom:['From published research: the first half-hour\'s direction tends to repeat in the last half-hour.','If the stock rose from yesterday\'s close to 10:00, buy at 3:30 pm ET.','Sell at the close.'],
+ gapgo:['Rides stocks that gap up on news and keep going.','After 15 minutes, buy if price breaks the opening high while above VWAP.','Sell if price drops below VWAP.'],
+ custom:['Your own formula rules from the Backtest tab.','Entry formula turns true.','Exit formula turns true.']};
+const money=v=>v==null?'—':'$'+(+v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+function planCard(p){const P=p.plan,H=SHELP[p.strategy]||['','',''],L=p.live;if(!P)return `<div class="note">No price plan available for this pick.</div>`;
+ const sigTxt=v=>v>0?'<b class="pos">LONG: the strategy says be in the trade</b>':v<0?'<b class="neg">SHORT signal</b>':'<b class="mu">WAITING: no entry signal yet</b>';
+ const long=P.side==='long';
+ return `<div class="plan">
+  ${P.no_trade?`<div class="warn">⚠️ ${P.no_trade}</div>`:''}
+  <div class="pgrid">
+   <div><small>Entry ${long?'(buy)':'(sell short)'}</small><b>${money(P.entry)}</b><span>${P.entry_note||'current price when the signal turns on'}</span></div>
+   <div><small>Stop-loss</small><b class="neg">${money(P.stop)}</b><span>${P.stop_note||''}</span></div>
+   <div><small>Profit target</small><b class="pos">${money(P.target)}</b><span>${P.target_note||''}</span></div>
+   <div><small>Bot's size</small><b>${P.shares?P.shares+' sh':'—'}</b><span>${P.shares?`≈ ${money(P.position_value)} · max loss at stop ≈ ${money(P.max_loss)}`:''}</span></div>
+  </div>
+  <div class="note">Signal at ${P.asof} ET: ${sigTxt(P.signal)}${L?` · latest at ${L.time} ET: ${sigTxt(L.signal)} @ ${money(L.price)}`:''}</div>
+  <div class="note">Reference: price ${money(P.price)} · open ${money(P.open)} · yesterday's close ${money(P.prev_close)} · first-15-min high/low ${money(P.or_high)} / ${money(P.or_low)} · VWAP ${money(P.vwap)} · reward:risk ${P.reward_risk??'—'}:1</div>
+  <ol class="steps">
+   <li><b>What it does:</b> ${H[0]}</li>
+   <li><b>When to get in:</b> ${H[1]}${P.entry_note?` Here, that's around <b>${money(P.entry)}</b>.`:''}</li>
+   <li><b>Protect yourself:</b> right after entering, place a <b>stop-loss order</b> at <b>${money(P.stop)}</b>. If price ${long?'falls':'rises'} to it, you're out automatically with a small, planned loss.</li>
+   <li><b>When to get out:</b> ${H[2]} Simple alternative: take profit near <b>${money(P.target)}</b>.</li>
+   <li><b>End of day:</b> close the position by 3:55 pm ET (12:55 pm Arizona). Day trades aren't held overnight.</li>
+  </ol></div>`}
+
 const SNAME=id=>(STRATS.find(s=>s.id===id)||{name:id}).name;
 async function loadBot(){const box=$('botBox');box.innerHTML='<span class="note">Loading…</span>';let D=null,E=[];
  try{const r=await fetch('data/latest.json?t='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);D=await r.json()}catch(e){box.innerHTML=`<div class="card note">No bot results yet (${location.protocol==='file:'?'open the GitHub Pages site to see bot results':e.message}). After you add the Alpaca keys as GitHub secrets, run the workflow once in <b>test</b> mode, or wait for the next trading morning.</div>`;return}
@@ -596,7 +659,14 @@ async function loadBot(){const box=$('botBox');box.innerHTML='<span class="note"
  const eo=D.eod,picks=D.picks||[],sc=D.screen||{},cum=E.length?(+E[E.length-1][1])-(+E[0][1]-+E[0][2]):NaN;
  const k=[['Session',`${D.date}${D.mode==='test'?' (test)':''}`,''],['Status',D.status||'—',''],['Today P&L',eo?`$${num(eo.day_pl)} (${pct(eo.day_pl_pct,2)})`:'—',eo?cls(eo.day_pl):''],['Account equity',eo?'$'+Math.round(eo.equity).toLocaleString():'—',''],['Days traded',E.length,''],['Total P&L',isFinite(cum)?'$'+num(cum):'—',cls(cum)]];
  let h=`<div class="kpis">${k.map(([a,b,c])=>`<div class="kpi"><small>${a}</small><b class="${c}">${b}</b></div>`).join('')}</div><div class="note">Last update ${D.updated?D.updated.replace('T',' '):''} ET${sc.time?` · screened at ${sc.time} · ${sc.passed} of ${sc.universe} stocks passed`:''}</div>`;
- h+=`<div class="card" style="margin-top:10px"><h3>Today's picks — best strategy per stock</h3>${picks.length?`<div class="tscroll"><table><tr><th>Symbol</th><th>Gap</th><th>Rel. vol</th><th>Strategy</th><th>BT Sharpe</th><th>BT return</th><th>BT trades</th><th>Win</th><th>PF</th><th></th></tr>${picks.map((p,i)=>`<tr><td><b>${p.sym}</b></td><td class="${cls(p.gap)}">${pct(p.gap)}</td><td>${num(p.rvol,1)}×</td><td>${SNAME(p.strategy)}</td><td>${num(p.bt.sharpe)}</td><td class="${cls(p.bt.tot)}">${pct(p.bt.tot)}</td><td>${p.bt.n}</td><td>${pct(p.bt.win,0)}</td><td>${num(p.bt.pf)}</td><td><button data-pk="${i}">Open</button></td></tr>`).join('')}</table></div><div class="note" style="margin-top:6px">BT = backtest on the prior ${(sc.settings||{}).lookback_days||25} trading days of 5-min bars, stop ${(sc.settings||{}).stop_pct}%, ${((sc.settings||{}).allow_shorts)?'long and short':'long only'}. Open loads the stock and strategy into Backtest.</div>`:'<span class="note">No picks.</span>'}</div>`;
+ h+=`<div class="card" style="margin-top:10px"><h3>New to this? Read first</h3><ul class="guide">
+  <li><b>Paper-trade first.</b> The bot uses fake money. Watch it for a few weeks before risking anything real.</li>
+  <li><b>Always use a stop-loss.</b> It's an order that sells automatically if price goes against you. Never move it further away.</li>
+  <li><b>Risk small.</b> A common rule is to lose at most 1% of your account on one trade. Size the trade so (entry − stop) × shares ≤ 1% of your account.</li>
+  <li><b>Don't chase.</b> If price has already run far past the entry, skip it. There's another trade tomorrow.</li>
+  <li><b>Use limit orders</b> near the entry price so you don't overpay in a fast market.</li>
+  <li>These are rule-based ideas from backtests, not recommendations or predictions. Past results don't guarantee future ones.</li></ul></div>`;
+ h+=`<div class="card" style="margin-top:10px"><h3>Today's picks: tap a stock for its trade plan</h3>${picks.length?picks.map((p,i)=>`<details class="pick"${i===0?' open':''}><summary><b>${p.sym}</b> <span class="${cls(p.gap)}">gap ${pct(p.gap)}</span> · ${num(p.rvol,1)}× volume · <span>${SNAME(p.strategy)}</span> <span class="mu">· backtest Sharpe ${num(p.bt.sharpe)}, ${p.bt.n} trades, win ${pct(p.bt.win,0)}</span>${p.plan&&!p.plan.no_trade?` <span class="tag">${p.plan.side==='long'?'BUY':'SHORT'} ≥ ${money(p.plan.entry)} · stop ${money(p.plan.stop)}</span>`:p.plan&&p.plan.no_trade?' <span class="tag mu">no trade (long-only)</span>':''}</summary>${planCard(p)}<div class="row" style="margin-top:6px"><button data-pk="${i}">Open in Backtest</button></div></details>`).join(''):'<span class="note">No picks.</span>'}<div class="note" style="margin-top:6px">Backtest = the prior ${(sc.settings||{}).lookback_days||25} trading days of 5-min bars, ${((sc.settings||{}).allow_shorts)?'long and short':'long only'}, ${(sc.settings||{}).stop_pct}% stop. Plans are calculated at ${sc.time||'screen time'} ET; levels from the strategy where it defines them, otherwise from the bot's stop and a 2:1 target.</div></div>`;
  if((D.positions||[]).length)h+=`<div class="card" style="margin-top:10px"><h3>Open positions (last update)</h3><table><tr><th>Symbol</th><th>Qty</th><th>Entry</th><th>Price</th><th>P&L</th></tr>${D.positions.map(p=>`<tr><td>${p.sym}</td><td>${p.qty}</td><td>${num(p.entry)}</td><td>${num(p.price)}</td><td class="${cls(p.pl_pct)}">${pct(p.pl_pct,2)}</td></tr>`).join('')}</table></div>`;
  if(E.length){h+='<div class="card" style="margin-top:10px"><h3>Paper account equity (end of day)</h3><div id="botEq" class="eqc" style="height:260px"></div></div>'}
  h+=`<div class="card" style="margin-top:10px"><h3>Activity</h3><div class="tscroll" style="max-height:300px"><table><tr><th>Time ET</th><th>Event</th><th>Detail</th></tr>${(D.events||[]).slice().reverse().map(e=>{const {time,kind,...r}=e;const d=kind==='entry'?`${r.qty>0?'BUY':'SELL SHORT'} ${Math.abs(r.qty)} ${r.sym} @ ~${num(r.price)} · ${SNAME(r.strategy)}`:kind==='exit'?`CLOSE ${r.sym} (${r.reason}) @ ~${num(r.price)} · ${pct(r.pl_pct,2)}`:kind==='screen'?`${r.passed} passed, ${r.tested} tested → ${(r.picks||[]).join(', ')||'none'}`:kind==='close'?`Equity $${num(r.equity)} · day P&L $${num(r.day_pl)}`:Object.entries(r).map(([a,b])=>a+': '+b).join(' · ');return `<tr><td>${time}</td><td>${kind}</td><td style="text-align:left">${d}</td></tr>`}).join('')}</table></div></div>`;
