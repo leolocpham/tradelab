@@ -1,0 +1,44 @@
+name: TradeLab daily bot
+
+# Times are UTC. Two crons per session cover New York daylight-saving changes;
+# the bot checks the real market calendar and exits if the time is wrong.
+on:
+  schedule:
+    - cron: '35 13 * * 1-5'   # 9:35 ET in summer (EDT)
+    - cron: '35 14 * * 1-5'   # 9:35 ET in winter (EST)
+    - cron: '0 19 * * 1-5'    # afternoon resume (summer)
+    - cron: '0 20 * * 1-5'    # afternoon resume (winter)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'test = screen the latest session, no orders (any time). auto = screen + paper trade (market hours).'
+        type: choice
+        options: [test, auto]
+        default: test
+
+concurrency:
+  group: tradelab-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install requests numpy
+      - name: Run bot
+        env:
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          MODE: ${{ github.event.inputs.mode || 'auto' }}
+        run: |
+          git config user.name "tradelab-bot"
+          git config user.email "tradelab-bot@users.noreply.github.com"
+          if [ "$MODE" = "test" ]; then python bot/run.py --test; else python bot/run.py; fi

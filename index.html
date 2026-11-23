@@ -64,7 +64,7 @@ code{background:var(--pn2);padding:1px 4px;border-radius:4px;font-size:12px}
  <div id="status">Ready</div>
 </header>
 <nav id="tabs">
- <button data-t="tChart" class="act">Chart</button><button data-t="tBT">Backtest</button><button data-t="tOpt">Optimizer</button><button data-t="tWF">Walk-forward</button><button data-t="tData">Data</button><button data-t="tSet">Settings</button>
+ <button data-t="tChart" class="act">Chart</button><button data-t="tBT">Backtest</button><button data-t="tOpt">Optimizer</button><button data-t="tWF">Walk-forward</button><button data-t="tBot">Bot</button><button data-t="tData">Data</button><button data-t="tSet">Settings</button>
 </nav>
 <main>
 <!-- CHART -->
@@ -138,6 +138,11 @@ code{background:var(--pn2);padding:1px 4px;border-radius:4px;font-size:12px}
  <div id="wfKpis" class="kpis"></div>
  <div id="wfEq" class="eqc" style="display:none"></div>
  <div class="card"><h3>Folds</h3><div class="tscroll" id="wfTbl"><span class="note">No results yet.</span></div></div>
+</section>
+<!-- BOT -->
+<section id="tBot" class="tab">
+ <div class="row"><button class="pri" id="bBotRef">Refresh</button><span class="note">Daily screener + paper-trading bot, run automatically by GitHub Actions each trading day. Paper money only.</span></div>
+ <div id="botBox"><span class="note">Open this tab to load the latest bot results.</span></div>
 </section>
 <!-- DATA -->
 <section id="tData" class="tab">
@@ -299,7 +304,7 @@ function stats(x,r,o){
 const OBJ={sharpe:m=>m.sharpe,tot:m=>m.tot,calmar:m=>m.calmar,pf:m=>isFinite(m.pf)?Math.min(m.pf,20):(m.pf===Infinity?20:-1)};
 
 /* ---------- Charts ---------- */
-const CH={main:null,eq:null,wf:null};
+const CH={main:null,eq:null,wf:null,bot:null};
 const chartOpts=()=>({autoSize:true,layout:{background:{type:'solid',color:'#0d1117'},textColor:'#c9d1d9',panes:{separatorColor:'#30363d'}},grid:{vertLines:{color:'#1a212c'},horzLines:{color:'#1a212c'}},
  rightPriceScale:{borderColor:'#30363d'},timeScale:{borderColor:'#30363d',timeVisible:!S.meta||S.meta.tf!=='1Day',secondsVisible:false},crosshair:{mode:0}});
 function times(){const o=new Array(S.bars.length);let p=-Infinity;for(let i=0;i<S.bars.length;i++){let t=S.bars[i].lt;if(t<=p)t=p+1;o[i]=t;p=t}return o}
@@ -487,10 +492,31 @@ async function importCsv(){const f=$('csvFile').files[0],sym=$('csvSym').value.t
  if(!rows.length)return status('No valid rows found',true);rows.sort((a,b)=>a[0]-b[0]);const key=`${sym}|${tf}|csv`;await DB.put({key,sym,tf,feed:'csv',bars:rows,cf:rows[0][0],ct:rows[rows.length-1][0],updated:Date.now()});
  status(`Imported ${rows.length.toLocaleString()} bars as ${sym} ${tf}. Clear the API Key ID or click Use in the table to load it.`);refreshDB()}
 
+
+/* ---------- Bot tab ---------- */
+const SNAME=id=>(STRATS.find(s=>s.id===id)||{name:id}).name;
+async function loadBot(){const box=$('botBox');box.innerHTML='<span class="note">Loading…</span>';let D=null,E=[];
+ try{const r=await fetch('data/latest.json?t='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);D=await r.json()}catch(e){box.innerHTML=`<div class="card note">No bot results yet (${location.protocol==='file:'?'open the GitHub Pages site to see bot results':e.message}). After you add the Alpaca keys as GitHub secrets, run the workflow once in <b>test</b> mode, or wait for the next trading morning.</div>`;return}
+ try{const r=await fetch('data/equity.csv?t='+Date.now());if(r.ok)E=(await r.text()).trim().split('\n').slice(1).filter(Boolean).map(l=>l.split(','))}catch(e){}
+ const eo=D.eod,picks=D.picks||[],sc=D.screen||{},cum=E.length?(+E[E.length-1][1])-(+E[0][1]-+E[0][2]):NaN;
+ const k=[['Session',`${D.date}${D.mode==='test'?' (test)':''}`,''],['Status',D.status||'—',''],['Today P&L',eo?`$${num(eo.day_pl)} (${pct(eo.day_pl_pct,2)})`:'—',eo?cls(eo.day_pl):''],['Account equity',eo?'$'+Math.round(eo.equity).toLocaleString():'—',''],['Days traded',E.length,''],['Total P&L',isFinite(cum)?'$'+num(cum):'—',cls(cum)]];
+ let h=`<div class="kpis">${k.map(([a,b,c])=>`<div class="kpi"><small>${a}</small><b class="${c}">${b}</b></div>`).join('')}</div><div class="note">Last update ${D.updated?D.updated.replace('T',' '):''} ET${sc.time?` · screened at ${sc.time} · ${sc.passed} of ${sc.universe} stocks passed`:''}</div>`;
+ h+=`<div class="card" style="margin-top:10px"><h3>Today's picks — best strategy per stock</h3>${picks.length?`<div class="tscroll"><table><tr><th>Symbol</th><th>Gap</th><th>Rel. vol</th><th>Strategy</th><th>BT Sharpe</th><th>BT return</th><th>BT trades</th><th>Win</th><th>PF</th><th></th></tr>${picks.map((p,i)=>`<tr><td><b>${p.sym}</b></td><td class="${cls(p.gap)}">${pct(p.gap)}</td><td>${num(p.rvol,1)}×</td><td>${SNAME(p.strategy)}</td><td>${num(p.bt.sharpe)}</td><td class="${cls(p.bt.tot)}">${pct(p.bt.tot)}</td><td>${p.bt.n}</td><td>${pct(p.bt.win,0)}</td><td>${num(p.bt.pf)}</td><td><button data-pk="${i}">Open</button></td></tr>`).join('')}</table></div><div class="note" style="margin-top:6px">BT = backtest on the prior ${(sc.settings||{}).lookback_days||25} trading days of 5-min bars, stop ${(sc.settings||{}).stop_pct}%, ${((sc.settings||{}).allow_shorts)?'long and short':'long only'}. Open loads the stock and strategy into Backtest.</div>`:'<span class="note">No picks.</span>'}</div>`;
+ if((D.positions||[]).length)h+=`<div class="card" style="margin-top:10px"><h3>Open positions (last update)</h3><table><tr><th>Symbol</th><th>Qty</th><th>Entry</th><th>Price</th><th>P&L</th></tr>${D.positions.map(p=>`<tr><td>${p.sym}</td><td>${p.qty}</td><td>${num(p.entry)}</td><td>${num(p.price)}</td><td class="${cls(p.pl_pct)}">${pct(p.pl_pct,2)}</td></tr>`).join('')}</table></div>`;
+ if(E.length){h+='<div class="card" style="margin-top:10px"><h3>Paper account equity (end of day)</h3><div id="botEq" class="eqc" style="height:260px"></div></div>'}
+ h+=`<div class="card" style="margin-top:10px"><h3>Activity</h3><div class="tscroll" style="max-height:300px"><table><tr><th>Time ET</th><th>Event</th><th>Detail</th></tr>${(D.events||[]).slice().reverse().map(e=>{const {time,kind,...r}=e;const d=kind==='entry'?`${r.qty>0?'BUY':'SELL SHORT'} ${Math.abs(r.qty)} ${r.sym} @ ~${num(r.price)} · ${SNAME(r.strategy)}`:kind==='exit'?`CLOSE ${r.sym} (${r.reason}) @ ~${num(r.price)} · ${pct(r.pl_pct,2)}`:kind==='screen'?`${r.passed} passed, ${r.tested} tested → ${(r.picks||[]).join(', ')||'none'}`:kind==='close'?`Equity $${num(r.equity)} · day P&L $${num(r.day_pl)}`:Object.entries(r).map(([a,b])=>a+': '+b).join(' · ');return `<tr><td>${time}</td><td>${kind}</td><td style="text-align:left">${d}</td></tr>`}).join('')}</table></div></div>`;
+ const cd=sc.candidates||[];if(cd.length)h+=`<div class="card" style="margin-top:10px"><h3>Screen candidates</h3><div class="tscroll" style="max-height:300px"><table><tr><th>Symbol</th><th>Price</th><th>Gap</th><th>Rel. vol</th><th>Avg $ vol</th><th>Best strategy</th><th>Sharpe</th></tr>${cd.map(c=>`<tr><td>${c.sym}</td><td>${num(c.price)}</td><td class="${cls(c.gap)}">${pct(c.gap)}</td><td>${num(c.rvol,1)}×</td><td>$${(c.adv/1e6).toFixed(0)}M</td><td>${c.best?SNAME(c.best.id):'<span class="mu">none passed</span>'}</td><td>${c.best?num(c.best.sharpe):''}</td></tr>`).join('')}</table></div></div>`;
+ box.innerHTML=h;
+ box.querySelectorAll('button[data-pk]').forEach(b=>b.onclick=()=>openPick(picks[+b.dataset.pk],D.date));
+ if(E.length){const T=E.map(r=>({time:Math.floor(Date.parse(r[0]+'T16:00:00Z')/1000),value:+r[1]}));eqChart('bot',$('botEq'),[{n:'Equity',c:'#4f8cff',d:T}])}}
+async function openPick(p,date){LS.set('par_'+p.strategy,p.params);$('stSel').value=p.strategy;LS.set('strat',p.strategy);buildParams();$('sym').value=p.sym;$('tf').value='5Min';$('feed').value='sip';
+ const d=new Date(date+'T12:00:00Z');$('dTo').value=date;$('dFrom').value=new Date(d-40*864e5).toISOString().slice(0,10);
+ $('tabs').querySelector('[data-t=tChart]').click();await load();if(S.bars.length){$('tabs').querySelector('[data-t=tBT]').click();runBT()}}
+
 /* ---------- Init ---------- */
 function init(){
  if(!LW){status('Chart library failed to load — check your internet connection and reload',true);return}
- $('tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('act',x===b));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('act',t.id===b.dataset.t));if(b.dataset.t==='tData')refreshDB();if(b.dataset.t==='tChart'&&CH.main)setTimeout(()=>renderChart(1),0)};
+ $('tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('act',x===b));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('act',t.id===b.dataset.t));if(b.dataset.t==='tData')refreshDB();if(b.dataset.t==='tBot')loadBot();if(b.dataset.t==='tChart'&&CH.main)setTimeout(()=>renderChart(1),0)};
  const k=LS.get('keys',null);if(k){$('kId').value=k.id;$('kSec').value=k.sec;$('kRem').checked=true}
  const h=LS.get('hdr',null),today=new Date(),ds=d=>new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
  $('sym').value=h?h.sym:(k?'AAPL':'DEMO');$('tf').value=h?h.tf:'5Min';$('feed').value=h&&h.feed!=='csv'?h.feed:'iex';$('dFrom').value=h?h.from:ds(new Date(today-60*864e5));$('dTo').value=h?h.to:ds(today);if(h)$('rth').checked=h.rth;
@@ -510,7 +536,7 @@ function init(){
  $('bRun').onclick=()=>runBT();$('bAll').onclick=compareAll;$('bOpt').onclick=runOpt;$('bOptStop').onclick=()=>S.stop=true;$('bWF').onclick=runWF;
  $('bTradesCsv').onclick=()=>{if(!S.bt)return status('Run a backtest first',true);download(`trades_${S.meta.sym}.csv`,'entry_time,exit_time,side,shares,entry_px,exit_px,pnl,return,bars,reason\n'+S.bt.r.trades.map(t=>[fmtT(S.bars[t.ei]),fmtT(S.bars[t.xi]),t.side>0?'long':'short',t.q,t.ep.toFixed(4),t.xp.toFixed(4),t.pnl.toFixed(2),t.ret.toFixed(5),t.xi-t.ei,t.why].join(',')).join('\n'))};
  $('bBarsCsv').onclick=()=>{if(!S.bars.length)return status('Load data first',true);download(`${S.meta.sym}_${S.meta.tf}.csv`,'time_et,open,high,low,close,volume\n'+S.bars.map(b=>[fmtT(b),b.o,b.h,b.l,b.c,b.v].join(',')).join('\n'))};
- $('bDbRef').onclick=refreshDB;$('bCsv').onclick=importCsv;
+ $('bDbRef').onclick=refreshDB;$('bBotRef').onclick=loadBot;$('bCsv').onclick=importCsv;
  $('bLoad').onclick=load;$('sym').onkeydown=e=>{if(e.key==='Enter')load()};$('bLive').onclick=()=>live.on?(stopLive(),status('Live stopped')):startLive();
  window.addEventListener('beforeunload',stopLive);
  load()}
