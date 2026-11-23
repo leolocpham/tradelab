@@ -36,7 +36,7 @@ jobs:
       - name: Run bot
         env:
           APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID || secrets.APCA_API_KEY || secrets.APCA_KEY_ID || secrets.ALPACA_API_KEY_ID || secrets.ALPACA_API_KEY || secrets.ALPACA_KEY_ID || secrets.API_KEY_ID || vars.APCA_API_KEY_ID }}
-          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY || vars.APCA_API_SECRET_KEY }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY || secrets.APCA_SECRET_KEY || secrets.APCA_API_SECRET || secrets.APCA_SECRET || secrets.ALPACA_API_SECRET_KEY || secrets.ALPACA_SECRET_KEY || secrets.ALPACA_SECRET || secrets.API_SECRET_KEY }}
           MODE: ${{ github.event.inputs.mode || 'auto' }}
         run: |
           git config user.name "tradelab-bot"
