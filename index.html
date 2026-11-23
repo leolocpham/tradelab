@@ -649,7 +649,7 @@ function planCard(p){const P=p.plan,H=SHELP[p.strategy]||['','',''],L=p.live;if(
    <li><b>When to get in:</b> ${H[1]}${P.entry_note?` Here, that's around <b>${money(P.entry)}</b>.`:''}</li>
    <li><b>Protect yourself:</b> right after entering, place a <b>stop-loss order</b> at <b>${money(P.stop)}</b>. If price ${long?'falls':'rises'} to it, you're out automatically with a small, planned loss.</li>
    <li><b>When to get out:</b> ${H[2]} Simple alternative: take profit near <b>${money(P.target)}</b>.</li>
-   <li><b>End of day:</b> close the position by 3:55 pm ET (12:55 pm Arizona). Day trades aren't held overnight.</li>
+   <li><b>End of day:</b> close the position by 3:55 pm ET (1:55 pm Arizona in winter, 12:55 pm in summer). Day trades aren't held overnight.</li>
   </ol></div>`}
 
 const SNAME=id=>(STRATS.find(s=>s.id===id)||{name:id}).name;
