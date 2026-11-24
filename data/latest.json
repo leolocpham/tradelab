@@ -14,11 +14,19 @@
     "CRWV",
     "AMD"
    ]
+  },
+  {
+   "time": "11:35",
+   "kind": "entry",
+   "sym": "CRWV",
+   "qty": 429,
+   "price": 41.87,
+   "strategy": "gapfade"
   }
  ],
  "blocked": {},
  "status": "trading",
- "updated": "2026-11-24T11:31:43-05:00",
+ "updated": "2026-11-24T12:00:20-05:00",
  "learning": {
   "source": "bot paper trades (data/trades.csv)",
   "trades": 0,
@@ -5679,6 +5687,11 @@
     "position_value": 17934.4,
     "max_loss": 269.02,
     "no_trade": null
+   },
+   "live": {
+    "signal": 0,
+    "price": 226.65,
+    "time": "12:00"
    }
   },
   {
@@ -5728,6 +5741,11 @@
     "position_value": 17995.94,
     "max_loss": 269.94,
     "no_trade": null
+   },
+   "live": {
+    "signal": 0,
+    "price": 5.02,
+    "time": "12:00"
    }
   },
   {
@@ -5777,6 +5795,11 @@
     "position_value": 17996.2,
     "max_loss": 269.94,
     "no_trade": null
+   },
+   "live": {
+    "signal": 0,
+    "price": 13.26,
+    "time": "12:00"
    }
   },
   {
@@ -5826,6 +5849,11 @@
     "position_value": 17968.39,
     "max_loss": 269.53,
     "no_trade": null
+   },
+   "live": {
+    "signal": 1,
+    "price": 42.35,
+    "time": "12:00"
    }
   },
   {
@@ -5875,8 +5903,22 @@
     "position_value": 17910.0,
     "max_loss": 268.65,
     "no_trade": null
+   },
+   "live": {
+    "signal": 0,
+    "price": 404.18,
+    "time": "12:00"
    }
   }
  ],
- "alloc_per_pick": 18000.0
+ "alloc_per_pick": 18000.0,
+ "positions": [
+  {
+   "sym": "CRWV",
+   "qty": 429,
+   "entry": 41.74,
+   "price": 42.325,
+   "pl_pct": 0.01402
+  }
+ ]
 }
