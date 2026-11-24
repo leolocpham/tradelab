@@ -22,11 +22,36 @@
    "qty": 429,
    "price": 41.87,
    "strategy": "gapfade"
+  },
+  {
+   "time": "12:15",
+   "kind": "entry",
+   "sym": "AMD",
+   "qty": 43,
+   "price": 409.455,
+   "strategy": "adx"
+  },
+  {
+   "time": "12:20",
+   "kind": "exit",
+   "sym": "AMD",
+   "qty": 43,
+   "reason": "signal",
+   "price": 409.01,
+   "pl_pct": -0.002
+  },
+  {
+   "time": "12:25",
+   "kind": "entry",
+   "sym": "AMD",
+   "qty": 44,
+   "price": 408.82,
+   "strategy": "adx"
   }
  ],
  "blocked": {},
  "status": "trading",
- "updated": "2026-11-24T12:00:20-05:00",
+ "updated": "2026-11-24T12:30:20-05:00",
  "learning": {
   "source": "bot paper trades (data/trades.csv)",
   "trades": 0,
@@ -5690,8 +5715,8 @@
    },
    "live": {
     "signal": 0,
-    "price": 226.65,
-    "time": "12:00"
+    "price": 225.71,
+    "time": "12:30"
    }
   },
   {
@@ -5744,8 +5769,8 @@
    },
    "live": {
     "signal": 0,
-    "price": 5.02,
-    "time": "12:00"
+    "price": 5.03,
+    "time": "12:30"
    }
   },
   {
@@ -5798,8 +5823,8 @@
    },
    "live": {
     "signal": 0,
-    "price": 13.26,
-    "time": "12:00"
+    "price": 13.4,
+    "time": "12:30"
    }
   },
   {
@@ -5852,8 +5877,8 @@
    },
    "live": {
     "signal": 1,
-    "price": 42.35,
-    "time": "12:00"
+    "price": 42.74,
+    "time": "12:30"
    }
   },
   {
@@ -5905,9 +5930,9 @@
     "no_trade": null
    },
    "live": {
-    "signal": 0,
-    "price": 404.18,
-    "time": "12:00"
+    "signal": 1,
+    "price": 411.92,
+    "time": "12:30"
    }
   }
  ],
@@ -5917,8 +5942,15 @@
    "sym": "CRWV",
    "qty": 429,
    "entry": 41.74,
-   "price": 42.325,
-   "pl_pct": 0.01402
+   "price": 42.905,
+   "pl_pct": 0.02791
+  },
+  {
+   "sym": "AMD",
+   "qty": 44,
+   "entry": 409.508864,
+   "price": 413.17,
+   "pl_pct": 0.00894
   }
  ]
 }
