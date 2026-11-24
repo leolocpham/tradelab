@@ -17,8 +17,8 @@
   }
  ],
  "blocked": {},
- "status": "screened",
- "updated": "2026-11-24T11:31:41-05:00",
+ "status": "trading",
+ "updated": "2026-11-24T11:31:43-05:00",
  "learning": {
   "source": "bot paper trades (data/trades.csv)",
   "trades": 0,
@@ -5877,5 +5877,6 @@
     "no_trade": null
    }
   }
- ]
+ ],
+ "alloc_per_pick": 18000.0
 }
