@@ -251,6 +251,7 @@ class Bot:
         # backtest every strategy on each candidate's recent history (prior days only)
         hist = self.history([r["sym"] for r in cands])
         o = self.bt_opts()
+        live = self.live_stats()
         for r in cands:
             x = Bars(hist.get(r["sym"], []))
             r["bars"] = x.n; res = []
@@ -259,12 +260,18 @@ class Bot:
                 m = backtest(x, signals(x, sid, None, cfg["allow_shorts"]), o)["m"]
                 pf = m["pf"]; pf = 99 if pf == math.inf else (pf if math.isfinite(pf) else 0)
                 elig = (m["n"] >= cfg["min_trades"] and m["tot"] > 0 and m["sharpe"] >= cfg["min_sharpe"] and pf >= cfg["min_profit_factor"])
-                res.append({"id": sid, "name": STRATS[sid][0], "ok": elig, **{k: m[k] for k in ("tot", "sharpe", "dd", "n", "win", "pf")}})
-            res.sort(key=lambda t: -t["sharpe"])
+                score, drop = self.learn_adjust(sid, m["sharpe"], live)
+                if drop: elig = False
+                res.append({"id": sid, "name": STRATS[sid][0], "ok": elig, "score": score, "drop": drop, "live": live.get(sid),
+                            **{k: m[k] for k in ("tot", "sharpe", "dd", "n", "win", "pf")}})
+            res.sort(key=lambda t: -t["score"])
             r["tests"] = res
             best = next((t for t in res if t["ok"]), None)
             r["best"] = best
-        picks = sorted([r for r in cands if r.get("best")], key=lambda r: -r["best"]["sharpe"])[: cfg["max_picks"]]
+        picks = sorted([r for r in cands if r.get("best")], key=lambda r: -r["best"]["score"])[: cfg["max_picks"]]
+        self.D["learning"] = {"source": "bot paper trades (data/trades.csv)", "trades": sum(v["n"] for v in live.values()),
+                              "by_strategy": {k: {"n": v["n"], "avg": v["avg"], "win": v["win"]} for k, v in live.items()},
+                              "dropped": sorted({t["id"] for r in cands for t in r.get("tests", []) if t.get("drop")})}
         self.D["screen"] = {"time": now.strftime("%H:%M"), "universe": len(syms), "passed": len(ok), "candidates": cands,
                             "settings": {k: cfg[k] for k in ("min_abs_gap_pct", "min_rvol", "min_price", "min_avg_dollar_volume", "lookback_days", "allow_shorts", "stop_pct")}}
         self.D["picks"] = [{"sym": r["sym"], "strategy": r["best"]["id"], "strategy_name": r["best"]["name"], "params": STRATS[r["best"]["id"]][2],
@@ -363,6 +370,55 @@ class Bot:
                 "vwap": r2(vw), "atr_d": r2(atr_d), "entry": r2(entry), "entry_note": trig_txt, "stop": r2(stp), "stop_note": stp_txt,
                 "target": r2(tgt), "target_note": tgt_txt, "risk_per_share": r2(risk), "reward_risk": round(abs(tgt - entry) / risk, 1) if risk else None,
                 "shares": shares, "position_value": r2(shares * entry), "max_loss": r2(shares * risk), "no_trade": no_trade}
+
+    # ---------- learning from live results
+    TRADE_COLS = ["date", "sym", "strategy", "side", "gap", "rvol", "bt_sharpe", "entry_time", "entry_price",
+                  "exit_time", "exit_price", "reason", "pl_pct", "source"]
+
+    def live_stats(self):
+        """Per-strategy live record from the bot's own paper trades (data/trades.csv)."""
+        f = self.data / "trades.csv"; st = {}
+        if not f.exists(): return st
+        import csv
+        for r in csv.DictReader(f.read_text().splitlines()):
+            try: pl = float(r["pl_pct"])
+            except (TypeError, ValueError): continue
+            d = st.setdefault(r["strategy"], {"n": 0, "sum": 0.0, "wins": 0})
+            d["n"] += 1; d["sum"] += pl; d["wins"] += pl > 0
+        for d in st.values():
+            d["avg"] = d["sum"] / d["n"]; d["win"] = d["wins"] / d["n"]
+        return st
+
+    def learn_adjust(self, sid, bt_sharpe, live):
+        """Blend backtest Sharpe with live record. Returns (score, dropped_reason)."""
+        cfg = self.cfg
+        if not cfg.get("learn_from_live", True): return bt_sharpe, None
+        L = live.get(sid)
+        if not L: return bt_sharpe, None
+        k = cfg.get("learn_prior_trades", 10)
+        w = L["n"] / (L["n"] + k)                      # trust grows with sample size
+        tilt = max(-1.0, min(1.0, L["avg"] / 0.005))   # +/-0.5% avg per trade = full tilt
+        if L["n"] >= cfg.get("learn_drop_after", 15) and L["avg"] < 0:
+            return bt_sharpe * (1 + w * tilt), f"dropped: {L['n']} live trades averaging {L['avg']*100:.2f}%"
+        return bt_sharpe * (1 + w * tilt), None
+
+    def record_trades(self):
+        """Pair today's entry/exit events into trades and append them to data/trades.csv."""
+        picks = {p["sym"]: p for p in self.D.get("picks") or []}
+        open_, rows = {}, []
+        for e in self.D.get("events", []):
+            if e["kind"] == "entry": open_[e["sym"]] = e
+            elif e["kind"] == "exit" and e.get("sym") in open_:
+                en = open_.pop(e["sym"]); p = picks.get(e["sym"], {})
+                rows.append([self.day, e["sym"], en.get("strategy", p.get("strategy", "")), "long" if en.get("qty", 1) > 0 else "short",
+                             f"{p.get('gap', 0):.4f}", f"{p.get('rvol', 0):.2f}", f"{(p.get('bt') or {}).get('sharpe', 0):.2f}",
+                             en["time"], f"{en.get('price', 0):.4f}", e["time"], f"{e.get('price', 0):.4f}", e.get("reason", ""),
+                             f"{e.get('pl_pct', 0):.5f}", "bot"])
+        f = self.data / "trades.csv"
+        lines = f.read_text().splitlines() if f.exists() else [",".join(self.TRADE_COLS)]
+        lines = [l for l in lines if not l.startswith(self.day + ",")] + [",".join(map(str, r)) for r in rows]
+        f.write_text("\n".join(lines) + "\n")
+        return len(rows)
 
     def bt_opts(self):
         c = self.cfg
@@ -464,6 +520,10 @@ class Bot:
         except Exception as e:
             self.log(f"fills unavailable: {e}")
         self.D["positions"] = []
+        try:
+            self.D["trades_logged"] = self.record_trades()
+        except Exception as e:
+            self.log(f"trade log failed: {e}")
         self.D["eod"] = {"equity": eq, "prev_equity": le, "day_pl": eq - le, "day_pl_pct": eq / le - 1 if le else 0, "pl_by_symbol": pnl}
         self.D["status"] = "closed"
         self.event("close", equity=round(eq, 2), day_pl=round(eq - le, 2))

@@ -24,3 +24,8 @@ Personal day-trading research page: live Alpaca market data, built-in and custom
 
 Settings: `bot/config.json`. Secrets needed: `APCA_API_KEY_ID`, `APCA_API_SECRET_KEY` (paper keys).
 Manual run: Actions → TradeLab daily bot → Run workflow → `test` (screen only, no orders).
+
+## Journal and learning
+- **Journal tab:** log trades you take from the bot's plans (auto-filled from today's picks). Stored in your browser; export/import JSON to back up or move devices.
+- **Learning:** win rate, average %, R-multiple and verdicts by strategy, gap size, relative volume, entry time and plan adherence, from your trades and/or the bot's paper trades. Suggests settings changes, and fits a logistic-regression model once there are 20+ trades.
+- **Bot self-tuning:** the bot appends every paper trade to `data/trades.csv`. When choosing strategies, it blends backtest Sharpe with each strategy's live record (weight n/(n+10)) and drops strategies averaging a loss over 15+ live trades (`learn_*` settings in `bot/config.json`).

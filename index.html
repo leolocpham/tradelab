@@ -74,7 +74,7 @@ code{background:var(--pn2);padding:1px 4px;border-radius:4px;font-size:12px}
  <div id="status">Ready</div>
 </header>
 <nav id="tabs">
- <button data-t="tChart" class="act">Chart</button><button data-t="tBT">Backtest</button><button data-t="tOpt">Optimizer</button><button data-t="tWF">Walk-forward</button><button data-t="tBot">Bot</button><button data-t="tData">Data</button><button data-t="tSet">Settings</button>
+ <button data-t="tChart" class="act">Chart</button><button data-t="tBT">Backtest</button><button data-t="tOpt">Optimizer</button><button data-t="tWF">Walk-forward</button><button data-t="tBot">Bot</button><button data-t="tJour">Journal</button><button data-t="tData">Data</button><button data-t="tSet">Settings</button>
 </nav>
 <main>
 <!-- CHART -->
@@ -153,6 +153,35 @@ code{background:var(--pn2);padding:1px 4px;border-radius:4px;font-size:12px}
 <section id="tBot" class="tab">
  <div class="row"><button class="pri" id="bBotRef">Refresh</button><span class="note">Daily screener + paper-trading bot, run automatically by GitHub Actions each trading day. Paper money only.</span></div>
  <div id="botBox"><span class="note">Open this tab to load the latest bot results.</span></div>
+</section>
+<!-- JOURNAL -->
+<section id="tJour" class="tab">
+ <div class="grid2">
+  <div class="card"><h3>Log a trade</h3>
+   <div class="row"><label>From today's plan<select id="jFrom"><option value="">— manual entry —</option></select></label><button id="jLoadPicks">Reload picks</button></div>
+   <div class="row"><label>Date<input type="date" id="jDate"></label><label>Symbol<input id="jSym" size="6"></label><label>Strategy<select id="jStrat"></select></label><label>Side<select id="jSide"><option value="1">Long</option><option value="-1">Short</option></select></label></div>
+   <div class="note">The plan (auto-filled from the Bot tab)</div>
+   <div class="row"><label>Plan entry $<input type="number" step="any" id="jPE"></label><label>Plan stop $<input type="number" step="any" id="jPS"></label><label>Plan target $<input type="number" step="any" id="jPT"></label></div>
+   <div class="row"><label>Gap %<input type="number" step="any" id="jGap"></label><label>Rel. vol ×<input type="number" step="any" id="jRvol"></label><label>BT Sharpe<input type="number" step="any" id="jBT"></label></div>
+   <div class="note">What you actually did</div>
+   <div class="row"><label>Entry time ET<input type="time" id="jET"></label><label>Entry $<input type="number" step="any" id="jEP"></label><label>Shares<input type="number" id="jQty"></label></div>
+   <div class="row"><label>Exit time ET<input type="time" id="jXT"></label><label>Exit $<input type="number" step="any" id="jXP"></label><label>Exit reason<select id="jWhy"><option>target</option><option>stop</option><option>strategy exit</option><option>end of day</option><option>manual / nervous</option></select></label></div>
+   <div class="row"><label>Followed the plan?<select id="jFol"><option value="yes">Yes, fully</option><option value="partly">Partly</option><option value="no">No</option></select></label><label>Confidence<select id="jConf"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></label></div>
+   <textarea id="jNote" rows="2" placeholder="Notes: why you took it, what happened, how you felt"></textarea>
+   <div class="row" style="margin-top:6px"><button class="pri" id="jSave">Save trade</button><button id="jClear">Clear form</button><span id="jMsg" class="note"></span></div>
+  </div>
+  <div class="card"><h3>How the learning works</h3><div class="note">
+   <p>Every trade you log, plus every paper trade the bot makes, becomes a data point: strategy, gap, relative volume, backtest score, entry time, whether the plan was followed, and the result.</p>
+   <p><b>Learning</b> below finds which of those factors go with winning trades, using simple statistics plus a small machine-learning model (logistic regression) once there's enough data. It then suggests concrete changes, like dropping a strategy or raising the minimum gap.</p>
+   <p><b>The bot learns too:</b> each morning it blends its backtests with its own live record per strategy. Winners get more weight, and a strategy averaging a loss over 15+ live trades is dropped automatically.</p>
+   <p>Your journal is saved in this browser. Use <b>Export</b> to back it up or move it to another device (<b>Import</b>).</p></div>
+   <div class="row" style="margin-top:8px"><button id="jExp">Export JSON</button><button id="jCsv">Export CSV</button><label class="note" style="cursor:pointer"><input type="file" id="jImp" accept=".json" style="display:none"><span style="border:1px solid var(--ln);border-radius:6px;padding:5px 8px">Import JSON</span></label></div>
+  </div>
+ </div>
+ <div class="card" style="margin-top:10px"><h3>My trades</h3><div class="tscroll" id="jTbl"></div></div>
+ <div class="card" style="margin-top:10px"><h3>Learning: what's working</h3>
+  <div class="row"><label>Data<select id="jSrc"><option value="me">My trades</option><option value="bot">Bot's paper trades</option><option value="all" selected>Both</option></select></label><button id="jRef">Refresh</button></div>
+  <div id="jLearn"><span class="note">Log trades to start learning.</span></div></div>
 </section>
 <!-- DATA -->
 <section id="tData" class="tab">
@@ -642,6 +671,7 @@ function planCard(p){const P=p.plan,H=SHELP[p.strategy]||['','',''],L=p.live;if(
    <div><small>Profit target</small><b class="pos">${money(P.target)}</b><span>${P.target_note||''}</span></div>
    <div><small>Bot's size</small><b>${P.shares?P.shares+' sh':'—'}</b><span>${P.shares?`≈ ${money(P.position_value)} · max loss at stop ≈ ${money(P.max_loss)}`:''}</span></div>
   </div>
+  <div class="note">📒 ${jRecord(p.strategy)}</div>
   <div class="note">Signal at ${P.asof} ET: ${sigTxt(P.signal)}${L?` · latest at ${L.time} ET: ${sigTxt(L.signal)} @ ${money(L.price)}`:''}</div>
   <div class="note">Reference: price ${money(P.price)} · open ${money(P.open)} · yesterday's close ${money(P.prev_close)} · first-15-min high/low ${money(P.or_high)} / ${money(P.or_low)} · VWAP ${money(P.vwap)} · reward:risk ${P.reward_risk??'—'}:1</div>
   <ol class="steps">
@@ -653,7 +683,7 @@ function planCard(p){const P=p.plan,H=SHELP[p.strategy]||['','',''],L=p.live;if(
   </ol></div>`}
 
 const SNAME=id=>(STRATS.find(s=>s.id===id)||{name:id}).name;
-async function loadBot(){const box=$('botBox');box.innerHTML='<span class="note">Loading…</span>';let D=null,E=[];
+async function loadBot(){await jLoadBot();const box=$('botBox');box.innerHTML='<span class="note">Loading…</span>';let D=null,E=[];
  try{const r=await fetch('data/latest.json?t='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);D=await r.json()}catch(e){box.innerHTML=`<div class="card note">No bot results yet (${location.protocol==='file:'?'open the GitHub Pages site to see bot results':e.message}). After you add the Alpaca keys as GitHub secrets, run the workflow once in <b>test</b> mode, or wait for the next trading morning.</div>`;return}
  try{const r=await fetch('data/equity.csv?t='+Date.now());if(r.ok)E=(await r.text()).trim().split('\n').slice(1).filter(Boolean).map(l=>l.split(','))}catch(e){}
  const eo=D.eod,picks=D.picks||[],sc=D.screen||{},cum=E.length?(+E[E.length-1][1])-(+E[0][1]-+E[0][2]):NaN;
@@ -678,10 +708,75 @@ async function openPick(p,date){LS.set('par_'+p.strategy,p.params);$('stSel').va
  const d=new Date(date+'T12:00:00Z');$('dTo').value=date;$('dFrom').value=new Date(d-40*864e5).toISOString().slice(0,10);
  $('tabs').querySelector('[data-t=tChart]').click();await load();if(S.bars.length){$('tabs').querySelector('[data-t=tBT]').click();runBT()}}
 
+
+/* ---------- Journal + learning ---------- */
+const GROUP=id=>(STRATS.find(s=>s.id===id)||{}).cat||'Other';
+let journal=LS.get('journal',[]),todayPicks=[],botTrades=[],jEdit=null;
+const jv=id=>$(id).value;const jn=id=>{const v=parseFloat($(id).value);return isFinite(v)?v:null};
+function jCalc(t){const s=t.side,o={};if(t.ep&&t.xp){o.pct=s*(t.xp/t.ep-1);o.usd=t.qty?s*(t.xp-t.ep)*t.qty:null;const risk=t.pe&&t.ps?Math.abs(t.pe-t.ps):null;o.R=risk?s*(t.xp-t.ep)/risk:null}return o}
+async function jLoadPicks(){try{const r=await fetch('data/latest.json?t='+Date.now());if(!r.ok)throw 0;const D=await r.json();todayPicks=(D.picks||[]).map(p=>({...p,date:D.date}))}catch(e){todayPicks=[]}
+ $('jFrom').innerHTML='<option value="">— manual entry —</option>'+todayPicks.map((p,i)=>`<option value="${i}">${p.date} · ${p.sym} · ${SNAME(p.strategy)}</option>`).join('')}
+async function jLoadBot(){try{const r=await fetch('data/trades.csv?t='+Date.now());if(!r.ok)throw 0;const L=(await r.text()).trim().split('\n'),H=L.shift().split(',');
+ botTrades=L.map(l=>{const v=l.split(','),o={};H.forEach((h,i)=>o[h]=v[i]);return {src:'bot',date:o.date,sym:o.sym,strategy:o.strategy,side:o.side==='short'?-1:1,gap:+o.gap,rvol:+o.rvol,bt:+o.bt_sharpe,et:o.entry_time,ep:+o.entry_price,xp:+o.exit_price,why:o.reason,pct:+o.pl_pct,fol:'yes'}})}catch(e){botTrades=[]}}
+function jFill(p){$('jDate').value=p.date||'';$('jSym').value=p.sym||'';$('jStrat').value=p.strategy||'custom';const P=p.plan||{};$('jSide').value=P.side==='short'?'-1':'1';$('jPE').value=P.entry??'';$('jPS').value=P.stop??'';$('jPT').value=P.target??'';$('jGap').value=p.gap!=null?(p.gap*100).toFixed(2):'';$('jRvol').value=p.rvol!=null?(+p.rvol).toFixed(2):'';$('jBT').value=p.bt?(+p.bt.sharpe).toFixed(2):''}
+function jClearForm(){jEdit=null;['jSym','jPE','jPS','jPT','jGap','jRvol','jBT','jET','jEP','jQty','jXT','jXP','jNote'].forEach(i=>$(i).value='');$('jFrom').value='';$('jDate').value=new Date().toISOString().slice(0,10);$('jSave').textContent='Save trade'}
+function jSave(){const t={id:jEdit||Date.now().toString(36),src:'me',date:jv('jDate'),sym:jv('jSym').trim().toUpperCase(),strategy:jv('jStrat'),side:+jv('jSide'),pe:jn('jPE'),ps:jn('jPS'),pt:jn('jPT'),gap:jn('jGap')!=null?jn('jGap')/100:null,rvol:jn('jRvol'),bt:jn('jBT'),et:jv('jET'),ep:jn('jEP'),qty:jn('jQty'),xt:jv('jXT'),xp:jn('jXP'),why:jv('jWhy'),fol:jv('jFol'),conf:+jv('jConf'),note:jv('jNote')};
+ if(!t.sym||!t.ep){$('jMsg').textContent='Symbol and entry price are required';return}Object.assign(t,jCalc(t));
+ if(jEdit)journal=journal.map(x=>x.id===jEdit?t:x);else journal.push(t);LS.set('journal',journal);$('jMsg').textContent=t.xp?`Saved · ${pct(t.pct,2)}${t.R!=null?' · '+num(t.R,2)+'R':''}`:'Saved as open trade (add the exit later)';jClearForm();jRender()}
+function jRender(){const rows=journal.slice().sort((a,b)=>(b.date+b.et).localeCompare(a.date+a.et));
+ $('jTbl').innerHTML=rows.length?`<table><tr><th>Date</th><th>Symbol</th><th>Strategy</th><th>Side</th><th>Entry</th><th>Exit</th><th>Shares</th><th>P&L $</th><th>P&L %</th><th>R</th><th>Plan</th><th>Exit reason</th><th></th></tr>${rows.map(t=>`<tr><td>${t.date}</td><td><b>${t.sym}</b></td><td>${SNAME(t.strategy)}</td><td>${t.side>0?'Long':'Short'}</td><td>${num(t.ep)}</td><td>${t.xp?num(t.xp):'<span class="mu">open</span>'}</td><td>${t.qty??''}</td><td class="${cls(t.usd)}">${t.usd!=null?num(t.usd):''}</td><td class="${cls(t.pct)}">${t.pct!=null?pct(t.pct,2):''}</td><td class="${cls(t.R)}">${t.R!=null?num(t.R,2):''}</td><td>${t.fol}</td><td>${t.xp?t.why:''}</td><td><button data-je="${t.id}">Edit</button> <button data-jd="${t.id}">✕</button></td></tr>`).join('')}</table>`:'<span class="note" style="padding:8px;display:block">No trades yet. Pick one of today\'s plans above, fill in what you did, and save.</span>';
+ $('jTbl').querySelectorAll('[data-jd]').forEach(b=>b.onclick=()=>{if(!confirm('Delete this trade?'))return;journal=journal.filter(t=>t.id!==b.dataset.jd);LS.set('journal',journal);jRender()});
+ $('jTbl').querySelectorAll('[data-je]').forEach(b=>b.onclick=()=>{const t=journal.find(x=>x.id===b.dataset.je);jEdit=t.id;$('jDate').value=t.date;$('jSym').value=t.sym;$('jStrat').value=t.strategy;$('jSide').value=String(t.side);$('jPE').value=t.pe??'';$('jPS').value=t.ps??'';$('jPT').value=t.pt??'';$('jGap').value=t.gap!=null?(t.gap*100).toFixed(2):'';$('jRvol').value=t.rvol??'';$('jBT').value=t.bt??'';$('jET').value=t.et||'';$('jEP').value=t.ep??'';$('jQty').value=t.qty??'';$('jXT').value=t.xt||'';$('jXP').value=t.xp??'';$('jWhy').value=t.why;$('jFol').value=t.fol;$('jConf').value=String(t.conf||3);$('jNote').value=t.note||'';$('jSave').textContent='Update trade';window.scrollTo(0,0)});
+ jLearn()}
+/* stats helpers */
+function agg(list){const n=list.length;if(!n)return null;let w=0,s=0,gw=0,gl=0,r=0,rn=0;for(const t of list){s+=t.pct;if(t.pct>0){w++;gw+=t.pct}else gl-=t.pct;if(t.R!=null){r+=t.R;rn++}}return {n,win:w/n,avg:s/n,pf:gl>0?gw/gl:(gw>0?Infinity:NaN),R:rn?r/rn:null,shr:n/(n+10)*(s/n)}}
+function verdict(a,k){const g=k==='s'?['keep','drop']:['good','avoid'];if(a.n<5)return '<span class="mu">need data</span>';if(a.shr>0.001)return `<b class="pos">${g[0]}</b>`;if(a.n>=10&&a.shr<-0.001)return `<b class="neg">${g[1]}</b>`;return '<span class="mu">watch</span>'}
+function bucket(list,f,edges,labels){return labels.map((lab,i)=>{const L=list.filter(t=>{const v=f(t);return v!=null&&isFinite(v)&&v>=edges[i]&&v<edges[i+1]});return {lab,a:agg(L)}})}
+const etMin=t=>{if(!t.et)return null;const [h,m]=t.et.split(':').map(Number);return h*60+m};
+function logit(list){/* logistic regression, standardized features, L2 */const groups=['Trend','Mean reversion','Breakout','Intraday research'];
+ const feat=t=>[Math.abs(t.gap||0)*100,Math.log(Math.max(t.rvol||1,0.1)),t.bt||0,(etMin(t)??600)/60,t.side,t.fol==='yes'?1:0,...groups.map(g=>GROUP(t.strategy)===g?1:0)];
+ const names=['Gap size','Relative volume (log)','Backtest Sharpe','Entry hour','Long vs short','Followed plan',...groups.map(g=>g+' strategy')];
+ const X=list.map(feat),y=list.map(t=>t.pct>0?1:0),d=names.length,mu=Array(d).fill(0),sd=Array(d).fill(0);
+ X.forEach(r=>r.forEach((v,j)=>mu[j]+=v/X.length));X.forEach(r=>r.forEach((v,j)=>sd[j]+=(v-mu[j])**2/X.length));const Z=X.map(r=>r.map((v,j)=>sd[j]>1e-12?(v-mu[j])/Math.sqrt(sd[j]):0));
+ const fit=(idx)=>{let w=Array(d).fill(0),b=0;for(let it=0;it<400;it++){const gw=Array(d).fill(0);let gb=0;for(const i of idx){const z=b+Z[i].reduce((s,v,j)=>s+v*w[j],0),p=1/(1+Math.exp(-z)),e=p-y[i];gb+=e;Z[i].forEach((v,j)=>gw[j]+=e*v)}const m=idx.length;b-=0.3*gb/m;w=w.map((wj,j)=>wj-0.3*(gw[j]/m+0.1*wj))}return {w,b}};
+ const pred=(M,i)=>1/(1+Math.exp(-(M.b+Z[i].reduce((s,v,j)=>s+v*M.w[j],0))));
+ const all=[...Array(X.length).keys()],M=fit(all),acc=all.filter(i=>(pred(M,i)>0.5)===(y[i]===1)).length/all.length;
+ let cv=null;if(X.length>=30){let ok=0;for(let k=0;k<5;k++){const te=all.filter(i=>i%5===k),tr=all.filter(i=>i%5!==k),Mk=fit(tr);ok+=te.filter(i=>(pred(Mk,i)>0.5)===(y[i]===1)).length}cv=ok/X.length}
+ const base=Math.max(y.filter(v=>v).length,y.filter(v=>!v).length)/y.length;
+ return {names,w:M.w,acc,cv,base,M,Z,mu,sd,feat}}
+function jLearn(){const src=$('jSrc').value,mine=journal.filter(t=>t.pct!=null&&isFinite(t.pct)).map(t=>({...t,src:'me'}));
+ const L=src==='me'?mine:src==='bot'?botTrades:mine.concat(botTrades),box=$('jLearn');
+ if(!L.length){box.innerHTML=`<span class="note">No closed trades yet (${src==='me'?'log your first trade above':'the bot records its trades at each day\'s close'}).</span>`;return}
+ const A=agg(L),fol=agg(mine.filter(t=>t.fol==='yes')),nofol=agg(mine.filter(t=>t.fol!=='yes')),stops=L.filter(t=>t.why==='stop').length;
+ let h=`<div class="kpis">${[['Closed trades',A.n,''],['Win rate',pct(A.win,0),''],['Average trade',pct(A.avg,2),cls(A.avg)],['Profit factor',num(A.pf),A.pf>1?'pos':'neg'],['Average R (mine)',A.R!=null?num(A.R,2)+'R':'—',cls(A.R)],['Stopped out',pct(stops/A.n,0),'']].map(([a,b,c])=>`<div class="kpi"><small>${a}</small><b class="${c}">${b}</b></div>`).join('')}</div>`;
+ const tbl=(title,rows,first,k)=>`<h3 style="margin:12px 0 6px">${title}</h3><div class="tscroll" style="max-height:none"><table><tr><th>${first}</th><th>Trades</th><th>Win</th><th>Avg</th><th>Avg R</th><th>PF</th><th>Verdict</th></tr>${rows.filter(r=>r.a).map(r=>`<tr><td>${r.lab}</td><td>${r.a.n}</td><td>${pct(r.a.win,0)}</td><td class="${cls(r.a.avg)}">${pct(r.a.avg,2)}</td><td>${r.a.R!=null?num(r.a.R,2):'—'}</td><td>${num(r.a.pf)}</td><td>${verdict(r.a,k)}</td></tr>`).join('')}</table></div>`;
+ const byS=[...new Set(L.map(t=>t.strategy))].map(id=>({lab:SNAME(id),id,a:agg(L.filter(t=>t.strategy===id))})).sort((a,b)=>b.a.shr-a.a.shr);
+ h+=tbl('By strategy',byS,'Strategy','s');
+ const gapB=bucket(L,t=>t.gap!=null?Math.abs(t.gap)*100:null,[0,4,8,15,999],['under 4%','4–8%','8–15%','15%+']);
+ const rvB=bucket(L,t=>t.rvol,[0,2,4,8,1e9],['under 2×','2–4×','4–8×','8×+']);
+ const tmB=bucket(L,etMin,[0,600,690,840,2000],['9:30–10:00','10:00–11:30','11:30–2:00','after 2:00 (ET)']);
+ h+=`<div class="grid2"><div>${tbl('By gap size',gapB,'Gap')}${tbl('By entry time',tmB,'Time')}</div><div>${tbl('By relative volume',rvB,'Volume')}${mine.length?tbl('Following the plan',[{lab:'Followed fully',a:fol},{lab:'Partly / not',a:nofol}],'Me'):''}</div></div>`;
+ const recs=[];
+ for(const r of byS){if(r.a.n>=10&&r.a.shr<-0.001)recs.push(`<b>Drop ${r.lab}</b>: ${r.a.n} trades averaging ${pct(r.a.avg,2)}. Ask Claude to remove "${r.id}" from the bot's strategies.`);else if(r.a.n>=10&&r.a.shr>0.002)recs.push(`<b>Favor ${r.lab}</b>: ${r.a.n} trades averaging ${pct(r.a.avg,2)}, win ${pct(r.a.win,0)}. Give its plans priority.`)}
+ const lowG=gapB[0].a,hiG=gapB[3].a;if(lowG&&lowG.n>=8&&lowG.avg<-0.001&&A.avg>lowG.avg)recs.push(`<b>Raise the minimum gap to 4%</b>: gaps under 4% averaged ${pct(lowG.avg,2)} over ${lowG.n} trades.`);
+ if(hiG&&hiG.n>=8&&hiG.avg<-0.001)recs.push(`<b>Lower the maximum gap to 15%</b>: gaps of 15%+ averaged ${pct(hiG.avg,2)} over ${hiG.n} trades.`);
+ const lowV=rvB[0].a;if(lowV&&lowV.n>=8&&lowV.avg<-0.001)recs.push(`<b>Raise min relative volume to 2×</b>: under 2× averaged ${pct(lowV.avg,2)} over ${lowV.n} trades.`);
+ tmB.forEach(b=>{if(b.a&&b.a.n>=8&&b.a.avg<-0.001)recs.push(`<b>Avoid entries ${b.lab}</b>: ${b.a.n} trades averaged ${pct(b.a.avg,2)}.`)});
+ if(fol&&nofol&&fol.n>=5&&nofol.n>=5)recs.push(fol.avg>nofol.avg?`<b>Stick to the plan</b>: you average ${pct(fol.avg,2)} when following it vs ${pct(nofol.avg,2)} when not.`:`<b>Your adjustments help</b>: ${pct(nofol.avg,2)} when deviating vs ${pct(fol.avg,2)} when following. Note what you change in your notes.`);
+ if(A.n>=10&&stops/A.n>0.5)recs.push(`<b>Stops hit on ${pct(stops/A.n,0)} of trades</b>: entries may be late, or the 1.5% stop too tight for these stocks. Try waiting for pullbacks, or ask Claude to test a 2% stop.`);
+ h+=`<h3 style="margin:12px 0 6px">Suggested fine-tuning</h3>${recs.length?'<ol class="steps">'+recs.map(r=>`<li>${r}</li>`).join('')+'</ol>':`<div class="note">No clear changes yet. Rules need about 8–10 trades per group before suggesting anything, so keep logging.</div>`}`;
+ if(L.length>=20){const R=logit(L),imp=R.names.map((n,j)=>({n,w:R.w[j]})).filter(o=>Math.abs(o.w)>0.05).sort((a,b)=>Math.abs(b.w)-Math.abs(a.w)).slice(0,6);const mx=Math.max(...imp.map(o=>Math.abs(o.w)),0.01);
+  h+=`<h3 style="margin:12px 0 6px">Machine-learning model (logistic regression, ${L.length} trades)</h3><div class="note">Predicts whether a trade wins from its features. Accuracy on its own data ${pct(R.acc,0)}${R.cv!=null?`, on held-out data (5-fold) <b>${pct(R.cv,0)}</b>`:''} vs ${pct(R.base,0)} by always guessing the most common result. ${R.cv!=null&&R.cv>R.base+0.05?'It is finding a real pattern.':'Not reliable yet: it needs more trades, or there is no strong pattern.'}</div>
+  <div style="margin-top:6px">${imp.map(o=>`<div class="ind"><span style="min-width:170px">${o.n}</span><span style="flex:1;margin:0 8px;height:8px;background:var(--pn2);border-radius:4px;position:relative"><i style="position:absolute;left:${o.w>0?50:50-Math.abs(o.w)/mx*50}%;width:${Math.abs(o.w)/mx*50}%;height:100%;border-radius:4px;background:${o.w>0?'var(--up)':'var(--dn)'}"></i></span><span class="${o.w>0?'pos':'neg'}" style="min-width:110px;text-align:right">${o.w>0?'more wins':'more losses'}</span></div>`).join('')||'<span class="note">No feature stands out yet.</span>'}</div>`;
+  S.model=R}else h+=`<div class="note" style="margin-top:8px">The machine-learning model starts at 20 closed trades (${L.length} so far).</div>`;
+ box.innerHTML=h}
+function jRecord(id){const me=agg(journal.filter(t=>t.strategy===id&&t.pct!=null)),bt=agg(botTrades.filter(t=>t.strategy===id));
+ const f=(lab,a)=>a?`${lab}: ${a.n} trade${a.n>1?'s':''}, win ${pct(a.win,0)}, avg ${pct(a.avg,2)}`:`${lab}: no trades yet`;return `${f('Your record',me)} · ${f('Bot live record',bt)}`}
+
 /* ---------- Init ---------- */
 function init(){
  if(!LW){status('Chart library failed to load — check your internet connection and reload',true);return}
- $('tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('act',x===b));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('act',t.id===b.dataset.t));if(b.dataset.t==='tData')refreshDB();if(b.dataset.t==='tBot')loadBot();if(b.dataset.t==='tChart'&&CH.main)setTimeout(()=>renderChart(1),0)};
+ $('tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('act',x===b));document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('act',t.id===b.dataset.t));if(b.dataset.t==='tData')refreshDB();if(b.dataset.t==='tBot')loadBot();if(b.dataset.t==='tJour'){jLoadPicks();jLoadBot().then(jRender)}if(b.dataset.t==='tChart'&&CH.main)setTimeout(()=>renderChart(1),0)};
  const k=LS.get('keys',null);if(k){$('kId').value=k.id;$('kSec').value=k.sec;$('kRem').checked=true}
  const h=LS.get('hdr',null),today=new Date(),ds=d=>new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
  $('sym').value=h?h.sym:(k?'AAPL':'DEMO');$('tf').value=h?h.tf:'5Min';$('feed').value=h&&h.feed!=='csv'?h.feed:'iex';$('dFrom').value=h?h.from:ds(new Date(today-60*864e5));$('dTo').value=h?h.to:ds(today);if(h)$('rth').checked=h.rth;
@@ -701,7 +796,7 @@ function init(){
  $('bRun').onclick=()=>runBT();$('bAll').onclick=compareAll;$('bOpt').onclick=runOpt;$('bOptStop').onclick=()=>S.stop=true;$('bWF').onclick=runWF;
  $('bTradesCsv').onclick=()=>{if(!S.bt)return status('Run a backtest first',true);download(`trades_${S.meta.sym}.csv`,'entry_time,exit_time,side,shares,entry_px,exit_px,pnl,return,bars,reason\n'+S.bt.r.trades.map(t=>[fmtT(S.bars[t.ei]),fmtT(S.bars[t.xi]),t.side>0?'long':'short',t.q,t.ep.toFixed(4),t.xp.toFixed(4),t.pnl.toFixed(2),t.ret.toFixed(5),t.xi-t.ei,t.why].join(',')).join('\n'))};
  $('bBarsCsv').onclick=()=>{if(!S.bars.length)return status('Load data first',true);download(`${S.meta.sym}_${S.meta.tf}.csv`,'time_et,open,high,low,close,volume\n'+S.bars.map(b=>[fmtT(b),b.o,b.h,b.l,b.c,b.v].join(',')).join('\n'))};
- $('bDbRef').onclick=refreshDB;$('bBotRef').onclick=loadBot;$('bCsv').onclick=importCsv;
+ $('bDbRef').onclick=refreshDB;for(const st of STRATS){const o=document.createElement('option');o.value=st.id;o.textContent=st.name;$('jStrat').appendChild(o)}jClearForm();$('jSave').onclick=jSave;$('jClear').onclick=jClearForm;$('jLoadPicks').onclick=jLoadPicks;$('jFrom').onchange=()=>{const i=$('jFrom').value;if(i!=='')jFill(todayPicks[+i])};$('jSrc').onchange=jLearn;$('jRef').onclick=async()=>{await jLoadBot();jLearn()};$('jExp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(journal,null,1)],{type:'application/json'}));a.download='tradelab_journal.json';a.click()};$('jCsv').onclick=()=>{const k=['date','sym','strategy','side','pe','ps','pt','gap','rvol','bt','et','ep','qty','xt','xp','why','fol','conf','pct','usd','R','note'];download('tradelab_journal.csv',k.join(',')+'\n'+journal.map(t=>k.map(x=>JSON.stringify(t[x]??'')).join(',')).join('\n'))};$('jImp').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const a=JSON.parse(await f.text());if(!Array.isArray(a))throw 0;const ids=new Set(journal.map(t=>t.id));journal=journal.concat(a.filter(t=>!ids.has(t.id)));LS.set('journal',journal);jRender();status('Imported '+a.length+' trades')}catch(_){status('Not a TradeLab journal file',true)}};$('bBotRef').onclick=loadBot;$('bCsv').onclick=importCsv;
  $('bLoad').onclick=load;$('sym').onkeydown=e=>{if(e.key==='Enter')load()};$('bLive').onclick=()=>live.on?(stopLive(),status('Live stopped')):startLive();
  window.addEventListener('beforeunload',stopLive);
  load()}
