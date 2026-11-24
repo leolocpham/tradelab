@@ -8,6 +8,9 @@ on:
     - cron: '35 14 * * 1-5'   # 9:35 ET in winter (EST)
     - cron: '0 19 * * 1-5'    # afternoon resume (summer)
     - cron: '0 20 * * 1-5'    # afternoon resume (winter)
+  push:                       # backup trigger: a commit to bot/trigger.txt starts the bot
+    branches: [main]
+    paths: ['bot/trigger.txt']
   workflow_dispatch:
     inputs:
       mode:
