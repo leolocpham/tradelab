@@ -64,11 +64,20 @@
    "reason": "signal",
    "price": 13.345,
    "pl_pct": -0.00707
+  },
+  {
+   "time": "13:15",
+   "kind": "exit",
+   "sym": "AMD",
+   "qty": 44,
+   "reason": "signal",
+   "price": 409.91,
+   "pl_pct": 0.00098
   }
  ],
  "blocked": {},
  "status": "trading",
- "updated": "2026-11-24T13:00:20-05:00",
+ "updated": "2026-11-24T13:30:20-05:00",
  "learning": {
   "source": "bot paper trades (data/trades.csv)",
   "trades": 0,
@@ -5732,8 +5741,8 @@
    },
    "live": {
     "signal": 0,
-    "price": 226.14,
-    "time": "13:00"
+    "price": 229.08,
+    "time": "13:30"
    }
   },
   {
@@ -5786,8 +5795,8 @@
    },
    "live": {
     "signal": 0,
-    "price": 5.04,
-    "time": "13:00"
+    "price": 4.96,
+    "time": "13:30"
    }
   },
   {
@@ -5840,8 +5849,8 @@
    },
    "live": {
     "signal": 0,
-    "price": 13.35,
-    "time": "13:00"
+    "price": 13.32,
+    "time": "13:30"
    }
   },
   {
@@ -5894,8 +5903,8 @@
    },
    "live": {
     "signal": 1,
-    "price": 42.6,
-    "time": "13:00"
+    "price": 42.38,
+    "time": "13:30"
    }
   },
   {
@@ -5947,9 +5956,9 @@
     "no_trade": null
    },
    "live": {
-    "signal": 1,
-    "price": 412.07,
-    "time": "13:00"
+    "signal": 0,
+    "price": 411.64,
+    "time": "13:30"
    }
   }
  ],
@@ -5959,15 +5968,8 @@
    "sym": "CRWV",
    "qty": 429,
    "entry": 41.74,
-   "price": 42.57,
-   "pl_pct": 0.01989
-  },
-  {
-   "sym": "AMD",
-   "qty": 44,
-   "entry": 409.508864,
-   "price": 412.365,
-   "pl_pct": 0.00697
+   "price": 42.36,
+   "pl_pct": 0.01485
   }
  ]
 }
