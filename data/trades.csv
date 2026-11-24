@@ -1,0 +1,6 @@
+date,sym,strategy,side,gap,rvol,bt_sharpe,entry_time,entry_price,exit_time,exit_price,reason,pl_pct,source
+2026-11-24,AMD,adx,long,0.0701,1.80,3.23,12:15,409.4550,12:20,409.0100,signal,-0.00200,bot
+2026-11-24,BMNR,adx,long,0.0524,2.43,4.29,12:35,13.4500,12:50,13.3450,signal,-0.00707,bot
+2026-11-24,AMD,adx,long,0.0701,1.80,3.23,12:25,408.8200,13:15,409.9100,signal,0.00098,bot
+2026-11-24,AMD,adx,long,0.0701,1.80,3.23,14:40,415.3900,15:05,409.9800,signal,-0.01274,bot
+2026-11-24,CRWV,gapfade,long,0.1209,1.51,3.58,11:35,41.8700,15:55,42.8350,end of day,0.02623,bot

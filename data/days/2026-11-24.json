@@ -90,11 +90,26 @@
    "reason": "signal",
    "price": 409.98,
    "pl_pct": -0.01274
+  },
+  {
+   "time": "15:55",
+   "kind": "exit",
+   "sym": "CRWV",
+   "qty": 429,
+   "reason": "end of day",
+   "price": 42.835,
+   "pl_pct": 0.02623
+  },
+  {
+   "time": "15:55",
+   "kind": "close",
+   "equity": 99958.75,
+   "day_pl": -41.25
   }
  ],
  "blocked": {},
- "status": "trading",
- "updated": "2026-11-24T15:30:20-05:00",
+ "status": "closed",
+ "updated": "2026-11-24T15:55:30-05:00",
  "learning": {
   "source": "bot paper trades (data/trades.csv)",
   "trades": 0,
@@ -5758,8 +5773,8 @@
    },
    "live": {
     "signal": 0,
-    "price": 225.28,
-    "time": "15:30"
+    "price": 227.38,
+    "time": "15:50"
    }
   },
   {
@@ -5812,8 +5827,8 @@
    },
    "live": {
     "signal": 0,
-    "price": 4.89,
-    "time": "15:30"
+    "price": 4.87,
+    "time": "15:50"
    }
   },
   {
@@ -5865,9 +5880,9 @@
     "no_trade": null
    },
    "live": {
-    "signal": 0,
-    "price": 13.1,
-    "time": "15:30"
+    "signal": 1,
+    "price": 13.22,
+    "time": "15:50"
    }
   },
   {
@@ -5920,8 +5935,8 @@
    },
    "live": {
     "signal": 1,
-    "price": 41.88,
-    "time": "15:30"
+    "price": 42.66,
+    "time": "15:50"
    }
   },
   {
@@ -5974,19 +5989,23 @@
    },
    "live": {
     "signal": 0,
-    "price": 410.41,
-    "time": "15:30"
+    "price": 413.26,
+    "time": "15:50"
    }
   }
  ],
  "alloc_per_pick": 18000.0,
- "positions": [
-  {
-   "sym": "CRWV",
-   "qty": 429,
-   "entry": 41.74,
-   "price": 41.86,
-   "pl_pct": 0.00287
+ "positions": [],
+ "trades_logged": 5,
+ "eod": {
+  "equity": 99958.75,
+  "prev_equity": 100000.0,
+  "day_pl": -41.25,
+  "day_pl_pct": -0.00041250000000003784,
+  "pl_by_symbol": {
+   "CRWV": 343.1999999999989,
+   "AMD": -250.64999999999964,
+   "BMNR": -133.79999999999927
   }
- ]
+ }
 }
