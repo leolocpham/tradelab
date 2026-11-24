@@ -234,7 +234,7 @@ class Bot:
             rows.append({"sym": s, "price": px, "open": db["o"], "gap": gap, "rvol": rvol, "chg": px / pdb["c"] - 1})
         # split-adjusted SIP daily bars (up to yesterday): prior close for the gap + 20-day average dollar volume
         if rows:
-            daily = api.bars([r["sym"] for r in rows], "1Day", self.day_dt - timedelta(days=45), self.open_t - timedelta(hours=9), "sip")
+            daily = api.bars([r["sym"] for r in rows], "1Day", self.day_dt - timedelta(days=45), self.day_dt - timedelta(minutes=1), "sip")  # daily bars are stamped 00:00 ET: end before today
             for r in rows:
                 d = daily.get(r["sym"], [])[-20:]
                 r["adv"] = sum(b[4] * b[5] for b in d) / len(d) if d else 0
@@ -545,7 +545,7 @@ class Bot:
         now = self.clock.now()
         if self.D.get("eod"):
             self.log("Already closed for today"); return "already closed"
-        if now < self.at("09:00") or now >= self.flatten_t:
+        if now < self.at("08:30") or now >= self.flatten_t:
             self.log("Outside trading window"); return "outside window"
         if not self.D.get("screen"):
             st = self.at(self.cfg["screen_time_et"])
