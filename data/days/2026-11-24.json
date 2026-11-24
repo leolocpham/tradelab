@@ -77,7 +77,7 @@
  ],
  "blocked": {},
  "status": "trading",
- "updated": "2026-11-24T14:00:20-05:00",
+ "updated": "2026-11-24T14:30:20-05:00",
  "learning": {
   "source": "bot paper trades (data/trades.csv)",
   "trades": 0,
@@ -5741,8 +5741,8 @@
    },
    "live": {
     "signal": 0,
-    "price": 226.36,
-    "time": "14:00"
+    "price": 228.29,
+    "time": "14:30"
    }
   },
   {
@@ -5796,7 +5796,7 @@
    "live": {
     "signal": 0,
     "price": 4.91,
-    "time": "14:00"
+    "time": "14:30"
    }
   },
   {
@@ -5849,8 +5849,8 @@
    },
    "live": {
     "signal": 0,
-    "price": 13.23,
-    "time": "14:00"
+    "price": 13.25,
+    "time": "14:30"
    }
   },
   {
@@ -5903,8 +5903,8 @@
    },
    "live": {
     "signal": 1,
-    "price": 42.14,
-    "time": "14:00"
+    "price": 42.3,
+    "time": "14:30"
    }
   },
   {
@@ -5957,8 +5957,8 @@
    },
    "live": {
     "signal": 0,
-    "price": 413.62,
-    "time": "14:00"
+    "price": 416.85,
+    "time": "14:30"
    }
   }
  ],
@@ -5968,8 +5968,8 @@
    "sym": "CRWV",
    "qty": 429,
    "entry": 41.74,
-   "price": 42.1738,
-   "pl_pct": 0.01039
+   "price": 42.175,
+   "pl_pct": 0.01042
   }
  ]
 }
